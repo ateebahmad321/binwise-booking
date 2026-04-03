@@ -1,9 +1,9 @@
 <?php 
 /**
- * Plugin Name: BinWise Booking System
+ * Plugin Name: Yellow Bins Digitize
  * Description: Multi-step bin rental booking form that feeds into WooCommerce checkout.
  * Version: 1.0.0
- * Author: BinWise Disposal
+ * Author: Ateeb Azhar Digitize Media
  * Text Domain: binwise-booking
  * Requires Plugins: woocommerce
  */
