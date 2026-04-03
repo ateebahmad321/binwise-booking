@@ -262,4 +262,4 @@
         <span class="bwb-total-bar__amount" id="bwb-running-total">$0.00</span>
     </div>
 
-</div>
+</div> 
