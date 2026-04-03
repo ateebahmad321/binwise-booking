@@ -200,9 +200,68 @@
         // Date
         $(document).on('change', '#bwb-delivery-date', function () { state.delivery_date = $(this).val(); });
 
+        // ── Town / City dropdown ──────────────────────────────────
+        $(document).on('change', '#bwb-town-select', function () {
+            var raw = $(this).val(); // e.g. "Beaumont|Green|50"
+            if (!raw) {
+                // Reset zone
+                state.delivery_zone = '';
+                state.zone_fee      = 0;
+                $('#bwb-zone-badge').hide().empty();
+                updateTotal();
+                return;
+            }
+
+            var parts    = raw.split('|');
+            var townName = parts[0] || '';
+            var zone     = parts[1] || '';
+            var fee      = parseFloat(parts[2]) || 0;
+
+            state.delivery_zone = zone;
+            state.zone_fee      = fee;
+
+            // Pre-fill the city field with the chosen town name
+            if (townName) {
+                $('#bwb-addr-city').val(townName);
+                state.address_city = townName;
+            }
+
+            // Show a zone badge beneath the dropdown
+            var badgeText, badgeStyle;
+            if (fee === 0) {
+                badgeText  = '✓ Included in price — no delivery surcharge';
+                badgeStyle = 'background:#d1e7dd;color:#0f5132;border-left:4px solid #22c55e;';
+            } else {
+                badgeText  = '📍 Delivery surcharge: +$' + fee.toFixed(2) + ' (' + zone + ' zone)';
+                badgeStyle = fee === 50
+                    ? 'background:#fff3cd;color:#856404;border-left:4px solid #ffc107;'
+                    : 'background:#fde8e8;color:#7f1d1d;border-left:4px solid #ef4444;';
+            }
+
+            $('#bwb-zone-badge')
+                .attr('style', badgeStyle + 'padding:8px 12px;border-radius:4px;font-size:13px;font-weight:600;')
+                .text(badgeText)
+                .show();
+
+            // Also clear the map status so it doesn't show stale zone info
+            $('#bwb-map-status').empty();
+
+            updateTotal();
+        });
+
         // Text inputs
         $('#bwb-addr-line1').on('input',    function () { state.address_line1    = $(this).val(); });
-        $('#bwb-addr-city').on('input',     function () { state.address_city     = $(this).val(); });
+        $('#bwb-addr-city').on('input',     function () {
+            state.address_city = $(this).val();
+            // If user types manually, reset town dropdown to avoid mismatch
+            if ($('#bwb-town-select').val()) {
+                $('#bwb-town-select').val('');
+                state.delivery_zone = '';
+                state.zone_fee      = 0;
+                $('#bwb-zone-badge').hide().empty();
+                updateTotal();
+            }
+        });
         $('#bwb-addr-province').on('input', function () { state.address_province = $(this).val(); });
         $('#bwb-addr-postal').on('input',   function () { state.address_postal   = $(this).val(); });
         $('#bwb-contents-other').on('input',function () { state.bin_contents_other = $(this).val(); });
@@ -267,9 +326,39 @@
             $('#bwb-addr-city').val(city);   state.address_city=city;
             $('#bwb-addr-province').val(prov);state.address_province=prov;
             $('#bwb-addr-postal').val(postal);state.address_postal=postal;
-            if(place.geometry) detectZone(place.geometry.location.lat(), place.geometry.location.lng());
-            $('#bwb-map-status').text('✓ '+line1+', '+city);
+
+            // Try to match the resolved city to a known town in the dropdown.
+            // If found, trigger that selection so the zone fee is applied.
+            var matched = matchTownDropdown(city);
+            if (!matched && place.geometry) {
+                // Fall back to polygon detection
+                detectZone(place.geometry.location.lat(), place.geometry.location.lng());
+            }
+
+            $('#bwb-map-status').text('✓ ' + line1 + ', ' + city);
         });
+    }
+
+    /**
+     * Try to find the city name in the town dropdown options.
+     * Returns true if a match was found and applied.
+     */
+    function matchTownDropdown(city) {
+        if (!city) return false;
+        var cityLower = city.toLowerCase().trim();
+        var matched   = false;
+        $('#bwb-town-select option').each(function () {
+            var val = $(this).val();
+            if (!val) return; // skip blank option
+            var parts    = val.split('|');
+            var townName = (parts[0] || '').toLowerCase().trim();
+            if (townName === cityLower) {
+                $('#bwb-town-select').val(val).trigger('change');
+                matched = true;
+                return false; // break $.each
+            }
+        });
+        return matched;
     }
 
     function detectZone(lat,lng){
@@ -325,6 +414,7 @@
         if(!state.bin_location)    e.push('Please select where you want the bin placed.');
         if(!state.address_line1)   e.push('Please enter your street address.');
         if(!state.address_city)    e.push('Please enter your city.');
+        if(!state.delivery_zone)   e.push('Please select your city / town from the dropdown so we can confirm your delivery area.');
         if(!state.agreed_terms)    e.push('Please agree to the Rental Agreement.');
         return e;
     }
