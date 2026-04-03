@@ -29,30 +29,12 @@ class BWB_WooCommerce {
 
         /* ── Checkout pipeline ───────────────────────────────── */
 
-        /*
-         * STEP A  – fires inside WC's checkout transaction, BEFORE the
-         * order row is fully committed.  We use it ONLY to load the
-         * booking into our static cache while $values (the cart item
-         * array) is still available.  We do NOT write to the DB here.
-         */
         add_action( 'woocommerce_checkout_create_order_line_item',
             [ __CLASS__, 'cache_booking_from_line_item' ], 10, 4 );
 
-        /*
-         * STEP B  – fires with a real $order_id AFTER the order and all
-         * its line items are committed to the DB.  This is where we write
-         * our bwb_bookings row.
-         *
-         * Signature: ( int $order_id, array $posted_data, WC_Order $order )
-         */
         add_action( 'woocommerce_checkout_order_processed',
             [ __CLASS__, 'save_on_order_processed' ], 20, 3 );
 
-        /*
-         * STEP C  – thank-you page fallback for async / redirect payments
-         * (PayPal IPN, Stripe webhooks, bank transfers …).
-         * At this point we can still pull the booking from the WC session.
-         */
         add_action( 'woocommerce_thankyou',
             [ __CLASS__, 'save_on_thankyou' ], 10, 1 );
 
@@ -119,27 +101,18 @@ class BWB_WooCommerce {
 
     /* ══════════════════════════════════════════════════════════════
        CHECKOUT PIPELINE — STEP A
-       Populate static cache while cart item data is available.
     ══════════════════════════════════════════════════════════════ */
 
     public static function cache_booking_from_line_item( $item, $cart_item_key, $values, $order ) {
         if ( empty( $values['bwb_booking'] ) ) return;
 
-        // Load into static cache for use in later hooks this request.
         self::$booking_cache = $values['bwb_booking'];
 
-        /*
-         * Also write it as order-level meta RIGHT NOW while we have the
-         * booking data.  The order object exists at this point (WC passes
-         * it as the 4th argument) even though it may not be fully saved yet.
-         * We save again after commit; this is just belt-and-suspenders.
-         */
         $order->update_meta_data( '_bwb_booking', $values['bwb_booking'] );
     }
 
     /* ══════════════════════════════════════════════════════════════
        CHECKOUT PIPELINE — STEP B
-       Order is fully committed. Write to our DB table.
     ══════════════════════════════════════════════════════════════ */
 
     public static function save_on_order_processed( $order_id, $posted_data, $order ) {
@@ -177,10 +150,6 @@ class BWB_WooCommerce {
        BOOKING RESOLUTION — four layers, most-reliable first
     ══════════════════════════════════════════════════════════════ */
 
-    /**
-     * Find the booking array using every available source.
-     * Returns the booking array or null.
-     */
     private static function resolve_booking( $order ) {
 
         // 1. In-memory static cache (same PHP request as checkout)
@@ -219,10 +188,8 @@ class BWB_WooCommerce {
     ══════════════════════════════════════════════════════════════ */
 
     public static function write_to_db( $order_id, array $booking, $order = null ) {
-        // Dedup guard
         if ( self::already_saved( $order_id ) ) return;
 
-        // Make sure the table exists (handles edge-cases where activation hook missed)
         BWB_Install::ensure_table();
 
         if ( ! $order ) {
@@ -253,13 +220,13 @@ class BWB_WooCommerce {
             'bin_label'        => $bin ? $bin['name']            : ( $booking['bin_id'] ?? '' ),
             'delivery_date'    => $delivery_date,
             'duration'         => $booking['duration']           ?? '',
-            'delivery_time'    => $booking['delivery_time']      ?? '',
-            'driveway_pads'    => ! empty( $booking['driveway_pads'] )  ? 1 : 0,
-            'mattresses'       => ! empty( $booking['mattresses'] )     ? 1 : 0,
-            'mattress_qty'     => intval( $booking['mattress_qty']      ?? 0 ),
+            'delivery_time'    => '',
+            'driveway_pads'    => 0,
+            'mattresses'       => 0,
+            'mattress_qty'     => 0,
             'bin_contents'     => $contents,
             'bin_location'     => $booking['bin_location']       ?? '',
-            'cancellation'     => ! empty( $booking['cancellation'] )   ? 1 : 0,
+            'cancellation'     => 0,
             'address_line1'    => $booking['address_line1']      ?? '',
             'address_city'     => $booking['address_city']       ?? '',
             'address_province' => $booking['address_province']   ?? '',
@@ -291,19 +258,16 @@ class BWB_WooCommerce {
         } else {
             $row_id = $wpdb->insert_id;
 
-            // Mark as saved (post meta survives object cache invalidation)
             update_post_meta( $order_id, '_bwb_db_saved', 1 );
             update_post_meta( $order_id, '_bwb_db_row_id', $row_id );
             update_post_meta( $order_id, '_bwb_booking', $booking );
 
-            // Also on the order object for display hooks
             if ( $order ) {
                 $order->update_meta_data( '_bwb_booking', $booking );
                 $order->update_meta_data( '_bwb_db_saved', 1 );
                 $order->save();
             }
 
-            // Clear static cache and session
             self::$booking_cache = null;
             if ( WC()->session ) {
                 WC()->session->set( 'bwb_booking', null );
@@ -399,15 +363,11 @@ class BWB_WooCommerce {
 
     /**
      * Build a label => value array covering every booking field.
-     * Delivery Zone is excluded. All other fields always shown.
      */
     private static function build_display_rows( array $booking ) {
         $bins      = BWB_Products::get_bins();
         $bin       = $bins[ $booking['bin_id'] ?? '' ] ?? null;
         $durations = BWB_Products::get_durations();
-        $times     = BWB_Products::get_delivery_times();
-        $locs      = BWB_Products::get_bin_locations();
-        $mp        = BWB_Products::get_mattress_prices();
 
         $rows = [];
 
@@ -428,16 +388,7 @@ class BWB_WooCommerce {
             }
         }
 
-        /* 4. Delivery Time */
-        if ( ! empty( $booking['delivery_time'] ) ) {
-            $t = $times[ $booking['delivery_time'] ] ?? null;
-            if ( $t ) {
-                $rows['Delivery Time'] = $t['label']
-                    . ( $t['price'] > 0 ? '  (+$' . number_format( $t['price'], 2 ) . ')' : '' );
-            }
-        }
-
-        /* 5. Delivery Address */
+        /* 4. Delivery Address */
         $addr = implode( ', ', array_filter( [
             $booking['address_line1']    ?? '',
             $booking['address_city']     ?? '',
@@ -448,7 +399,8 @@ class BWB_WooCommerce {
             $rows['Delivery Address'] = $addr;
         }
 
-        /* 6. Bin Placement */
+        /* 5. Bin Placement */
+        $locs = BWB_Products::get_bin_locations();
         if ( ! empty( $booking['bin_location'] ) ) {
             $loc = $locs[ $booking['bin_location'] ] ?? $booking['bin_location'];
             if ( $booking['bin_location'] === 'other' && ! empty( $booking['bin_location_other'] ) ) {
@@ -457,7 +409,7 @@ class BWB_WooCommerce {
             $rows['Bin Placement'] = $loc;
         }
 
-        /* 7. Bin Contents */
+        /* 6. Bin Contents */
         $content_labels = BWB_Products::get_bin_contents();
         $contents = array_map(
             function ( $k ) use ( $content_labels ) { return $content_labels[ $k ] ?? $k; },
@@ -468,27 +420,12 @@ class BWB_WooCommerce {
         }
         $rows['Bin Contents'] = ! empty( $contents ) ? implode( ', ', $contents ) : 'Not specified';
 
-        /* 8. Driveway Protection Pads */
-        $rows['Driveway Protection Pads'] = ! empty( $booking['driveway_pads'] ) ? 'Yes  (+$20.00)' : 'No';
-
-        /* 9. Mattresses */
-        if ( ! empty( $booking['mattresses'] ) && intval( $booking['mattress_qty'] ?? 0 ) > 0 ) {
-            $qty   = intval( $booking['mattress_qty'] );
-            $price = $mp[ $qty ] ?? 0;
-            $rows['Mattresses'] = $qty . '  (+$' . number_format( $price, 2 ) . ')';
-        } else {
-            $rows['Mattresses'] = 'No';
-        }
-
-        /* 10. Cancellation Protection */
-        $rows['Cancellation Protection'] = ! empty( $booking['cancellation'] ) ? 'Yes  (+$5.00)' : 'No';
-
-        /* 11. Additional Notes */
+        /* 7. Additional Notes */
         if ( ! empty( $booking['additional_note'] ) ) {
             $rows['Additional Notes'] = $booking['additional_note'];
         }
 
-        /* 12. Order Total */
+        /* 8. Order Total */
         if ( ! empty( $booking['total_price'] ) ) {
             $rows['Order Total'] = '$' . number_format( floatval( $booking['total_price'] ), 2 );
         }

@@ -30,63 +30,15 @@
             </div>
         </div>
 
-        <!-- ── SECTION 4: Delivery Time ─────────────────────────── -->
-        <div class="bwb-section">
-            <div class="bwb-section__title">What Time Would You Like Your Bin Delivered? <span class="bwb-req">*</span></div>
-            <div class="bwb-choice-list" id="bwb-times" role="radiogroup" aria-label="Delivery time">
-                <!-- Populated by JS -->
-            </div>
-        </div>
-
-        <!-- ── SECTION 5: Driveway Pads ─────────────────────────── -->
-        <div class="bwb-section">
-            <div class="bwb-section__title">Add Driveway Protection Pads? <span class="bwb-req">*</span></div>
-            <div class="bwb-segmented" role="group">
-                <label class="bwb-seg-btn">
-                    <input type="radio" name="driveway_pads" value="yes">
-                    <span>YES (+$20.00)</span>
-                </label>
-                <label class="bwb-seg-btn">
-                    <input type="radio" name="driveway_pads" value="no" checked>
-                    <span>NO</span>
-                </label>
-            </div>
-        </div>
-
-        <!-- ── SECTION 6: Mattresses ─────────────────────────────── -->
-        <div class="bwb-section">
-            <div class="bwb-section__title">Are Any Mattresses Going in The Bin? <span class="bwb-req">*</span></div>
-            <div class="bwb-segmented" role="group">
-                <label class="bwb-seg-btn">
-                    <input type="radio" name="mattresses" value="yes">
-                    <span>YES</span>
-                </label>
-                <label class="bwb-seg-btn">
-                    <input type="radio" name="mattresses" value="no" checked>
-                    <span>NO</span>
-                </label>
-            </div>
-            <div id="bwb-mattress-qty-wrap" style="display:none; margin-top:14px;">
-                <div class="bwb-section__title" style="margin-bottom:10px;">How Many Mattresses? <span class="bwb-req">*</span></div>
-                <div class="bwb-choice-list" id="bwb-mattress-qty" role="radiogroup" aria-label="Number of mattresses">
-                    <!-- Populated by JS -->
-                </div>
-            </div>
-        </div>
-
-        <!-- ── SECTION 7: Contents ───────────────────────────────── -->
+        <!-- ── SECTION 4: Contents ───────────────────────────────── -->
         <div class="bwb-section">
             <div class="bwb-section__title">What Will Be Going In The Bin? <span class="bwb-req">*</span></div>
             <div class="bwb-choice-list bwb-choice-list--checkbox" id="bwb-contents" role="group" aria-label="Bin contents">
                 <!-- Populated by JS -->
             </div>
-            <div id="bwb-contents-other-wrap" style="display:none; margin-top:12px;">
-                <label class="bwb-label" for="bwb-contents-other">Please describe other contents <span class="bwb-req">*</span></label>
-                <input type="text" id="bwb-contents-other" name="bin_contents_other" class="bwb-input" placeholder="Describe what will go in the bin…">
-            </div>
         </div>
 
-        <!-- ── SECTION 8: Bin Placement ─────────────────────────── -->
+        <!-- ── SECTION 5: Bin Placement ─────────────────────────── -->
         <div class="bwb-section">
             <div class="bwb-section__title">Where Do You Want Your Bin? <span class="bwb-req">*</span></div>
             <div class="bwb-choice-list" id="bwb-location" role="radiogroup" aria-label="Bin placement">
@@ -98,22 +50,7 @@
             </div>
         </div>
 
-        <!-- ── SECTION 9: Cancellation Protection ───────────────── -->
-        <div class="bwb-section">
-            <div class="bwb-section__title">Avoid Late Cancellation Fees? <span class="bwb-req">*</span></div>
-            <div class="bwb-segmented" role="group">
-                <label class="bwb-seg-btn">
-                    <input type="radio" name="cancellation" value="yes">
-                    <span>YES (+$5.00)</span>
-                </label>
-                <label class="bwb-seg-btn">
-                    <input type="radio" name="cancellation" value="no" checked>
-                    <span>NO</span>
-                </label>
-            </div>
-        </div>
-
-        <!-- ── SECTION 10: Delivery Address ─────────────────────── -->
+        <!-- ── SECTION 6: Delivery Address ─────────────────────── -->
         <div class="bwb-section">
             <div class="bwb-section__title">Delivery Address <span class="bwb-req">*</span></div>
 
@@ -233,13 +170,13 @@
             </div>
         </div>
 
-        <!-- ── SECTION 11: Additional Notes ─────────────────────── -->
+        <!-- ── SECTION 7: Additional Notes ─────────────────────── -->
         <div class="bwb-section">
             <div class="bwb-section__title">Additional Information</div>
             <input type="text" id="bwb-additional-note" name="additional_note" class="bwb-input" placeholder="Gate codes, special instructions, access notes…">
         </div>
 
-        <!-- ── SECTION 12: Terms + Submit ───────────────────────── -->
+        <!-- ── SECTION 8: Terms + Submit ────────────────────────── -->
         <div class="bwb-section">
             <div class="bwb-choice-list" style="margin-bottom:18px;">
                 <label class="bwb-choice bwb-terms">
@@ -262,4 +199,4 @@
         <span class="bwb-total-bar__amount" id="bwb-running-total">$0.00</span>
     </div>
 
-</div> 
+</div>

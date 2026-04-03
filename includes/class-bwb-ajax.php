@@ -62,15 +62,10 @@ class BWB_Ajax {
             'bin_id'             => sanitize_key( $post['bin_id'] ?? '' ),
             'delivery_date'      => sanitize_text_field( $post['delivery_date'] ?? '' ),
             'duration'           => sanitize_key( $post['duration'] ?? '' ),
-            'delivery_time'      => sanitize_key( $post['delivery_time'] ?? '' ),
-            'driveway_pads'      => ( ($post['driveway_pads'] ?? '') === 'yes' ),
-            'mattresses'         => ( ($post['mattresses'] ?? '') === 'yes' ),
-            'mattress_qty'       => intval( $post['mattress_qty'] ?? 0 ),
             'bin_contents'       => array_map( 'sanitize_key', (array)($post['bin_contents'] ?? []) ),
             'bin_contents_other' => sanitize_text_field( $post['bin_contents_other'] ?? '' ),
             'bin_location'       => sanitize_key( $post['bin_location'] ?? '' ),
             'bin_location_other' => sanitize_text_field( $post['bin_location_other'] ?? '' ),
-            'cancellation'       => ( ($post['cancellation'] ?? '') === 'yes' ),
             'address_line1'      => sanitize_text_field( $post['address_line1'] ?? '' ),
             'address_city'       => sanitize_text_field( $post['address_city'] ?? '' ),
             'address_province'   => sanitize_text_field( $post['address_province'] ?? 'AB' ),
@@ -108,7 +103,6 @@ class BWB_Ajax {
             $errors[] = 'Please select how many days you need the bin.';
         }
 
-        if ( empty($data['delivery_time']) )  $errors[] = 'Please select a delivery time window.';
         if ( empty($data['bin_location']) )   $errors[] = 'Please select where you want the bin placed.';
         if ( empty($data['address_line1']) )  $errors[] = 'Please enter your street address.';
         if ( empty($data['address_city']) )   $errors[] = 'Please enter your city.';

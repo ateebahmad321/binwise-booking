@@ -5,10 +5,9 @@
     'use strict';
 
     var state = {
-        bin_id: '', delivery_date: '', duration: '', delivery_time: '',
-        driveway_pads: false, mattresses: false, mattress_qty: 0,
+        bin_id: '', delivery_date: '', duration: '',
         bin_contents: [], bin_contents_other: '', bin_location: '',
-        bin_location_other: '', cancellation: false,
+        bin_location_other: '',
         address_line1: '', address_city: '', address_province: 'AB',
         address_postal: '', delivery_zone: '', zone_fee: 0,
         same_billing: 'yes', billing_line1: '', billing_city: '',
@@ -19,8 +18,6 @@
     $(function () {
         buildBinCards();
         buildDurations();
-        buildDeliveryTimes();
-        buildMattressQty();
         buildBinContents();
         buildBinLocations();
         setMinDate();
@@ -56,8 +53,8 @@
                   '<div class="bwb-bin-card__thumb">' + img + '</div>' +
                   '<div class="bwb-bin-card__text">' +
                     '<div class="bwb-bin-card__name">' + esc(bin.name) + '</div>' +
-'<div class="bwb-bin-card__dim">' + esc(bin.dimensions) + '</div>' +
-(bin.tonnage ? '<div class="bwb-bin-card__tonnage">' + esc(bin.tonnage) + '</div>' : '') +
+                    '<div class="bwb-bin-card__dim">' + esc(bin.dimensions) + '</div>' +
+                    (bin.tonnage ? '<div class="bwb-bin-card__tonnage">' + esc(bin.tonnage) + '</div>' : '') +
                     details +
                   '</div>' +
                 '</div>' +
@@ -76,25 +73,6 @@
                 ? '<span class="bwb-choice__price">+$' + fmt(d.price) + '</span>'
                 : '<span class="bwb-choice__price" style="color:#2e8657">Included</span>';
             $c.append(radio('duration', key, esc(d.label), badge));
-        });
-    }
-
-    function buildDeliveryTimes() {
-        var $c = $('#bwb-times').empty();
-        $.each(BWB.times, function (key, t) {
-            var badge = t.price > 0
-                ? '<span class="bwb-choice__price">+$' + fmt(t.price) + '</span>'
-                : '<span class="bwb-choice__price" style="color:#2e8657">Included</span>';
-            $c.append(radio('delivery_time', key, esc(t.label), badge));
-        });
-    }
-
-    function buildMattressQty() {
-        var $c = $('#bwb-mattress-qty').empty();
-        $.each(BWB.mattress_prices, function (qty, price) {
-            $c.append(radio('mattress_qty', qty,
-                qty + ' mattress' + (qty > 1 ? 'es' : ''),
-                '<span class="bwb-choice__price">+$' + fmt(price) + '</span>'));
         });
     }
 
@@ -152,9 +130,7 @@
             $(this).addClass('is-selected');
             var $r = $(this).find('input[type=radio]').prop('checked', true);
             var name = $r.attr('name'), val = $r.val();
-            if (name === 'duration')      state.duration = val;
-            if (name === 'delivery_time') state.delivery_time = val;
-            if (name === 'mattress_qty')  state.mattress_qty = parseInt(val, 10);
+            if (name === 'duration')     state.duration = val;
             if (name === 'bin_location') {
                 state.bin_location = val;
                 $('#bwb-location-other-wrap').toggle(val === 'other');
@@ -171,8 +147,6 @@
             $('.bwb-choice-list--checkbox input:checked').each(function () {
                 state.bin_contents.push($(this).val());
             });
-            $('#bwb-contents-other-wrap').toggle(state.bin_contents.indexOf('other') > -1);
-            if (state.bin_contents.indexOf('other') === -1) state.bin_contents_other = '';
         });
         $(document).on('click', '.bwb-choice-list--checkbox .bwb-choice', function (e) {
             if (!$(e.target).is('input')) {
@@ -181,16 +155,9 @@
             }
         });
 
-        // Segmented
+        // Segmented — billing only
         $(document).on('change', '.bwb-segmented input[type=radio]', function () {
             var name = $(this).attr('name'), val = $(this).val();
-            if (name === 'driveway_pads') state.driveway_pads = (val === 'yes');
-            if (name === 'cancellation')  state.cancellation  = (val === 'yes');
-            if (name === 'mattresses') {
-                state.mattresses = (val === 'yes');
-                $('#bwb-mattress-qty-wrap').toggle(val === 'yes');
-                if (val !== 'yes') { state.mattress_qty = 0; $('#bwb-mattress-qty .bwb-choice').removeClass('is-selected'); }
-            }
             if (name === 'same_billing') {
                 state.same_billing = val;
                 $('#bwb-billing-address-wrap').toggle(val === 'no');
@@ -203,9 +170,8 @@
 
         // ── Town / City dropdown ──────────────────────────────────
         $(document).on('change', '#bwb-town-select', function () {
-            var raw = $(this).val(); // e.g. "Beaumont|Green|50"
+            var raw = $(this).val();
             if (!raw) {
-                // Reset zone
                 state.delivery_zone = '';
                 state.zone_fee      = 0;
                 $('#bwb-zone-badge').hide().empty();
@@ -221,13 +187,11 @@
             state.delivery_zone = zone;
             state.zone_fee      = fee;
 
-            // Pre-fill the city field with the chosen town name
             if (townName) {
                 $('#bwb-addr-city').val(townName);
                 state.address_city = townName;
             }
 
-            // Show a zone badge beneath the dropdown
             var badgeText, badgeStyle;
             if (fee === 0) {
                 badgeText  = '✓ Included in price — no delivery surcharge';
@@ -244,9 +208,7 @@
                 .text(badgeText)
                 .show();
 
-            // Also clear the map status so it doesn't show stale zone info
             $('#bwb-map-status').empty();
-
             updateTotal();
         });
 
@@ -254,7 +216,6 @@
         $('#bwb-addr-line1').on('input',    function () { state.address_line1    = $(this).val(); });
         $('#bwb-addr-city').on('input',     function () {
             state.address_city = $(this).val();
-            // If user types manually, reset town dropdown to avoid mismatch
             if ($('#bwb-town-select').val()) {
                 $('#bwb-town-select').val('');
                 state.delivery_zone = '';
@@ -265,7 +226,6 @@
         });
         $('#bwb-addr-province').on('input', function () { state.address_province = $(this).val(); });
         $('#bwb-addr-postal').on('input',   function () { state.address_postal   = $(this).val(); });
-        $('#bwb-contents-other').on('input',function () { state.bin_contents_other = $(this).val(); });
         $('#bwb-location-other').on('input',function () { state.bin_location_other = $(this).val(); });
         $('#bwb-additional-note').on('input',function(){ state.additional_note   = $(this).val(); });
         $('#bwb-bill-line1').on('input',    function () { state.billing_line1    = $(this).val(); });
@@ -287,12 +247,7 @@
     function calcTotal() {
         var bin = BWB.bins[state.bin_id]; if (!bin) return 0;
         var t = bin.price;
-        if (BWB.durations[state.duration])     t += BWB.durations[state.duration].price;
-        if (BWB.times[state.delivery_time])    t += BWB.times[state.delivery_time].price;
-        if (state.driveway_pads)               t += 20;
-        if (state.mattress_qty > 0 && BWB.mattress_prices[state.mattress_qty])
-            t += BWB.mattress_prices[state.mattress_qty];
-        if (state.cancellation)                t += 5;
+        if (BWB.durations[state.duration]) t += BWB.durations[state.duration].price;
         t += parseFloat(state.zone_fee) || 0;
         return t;
     }
@@ -328,11 +283,8 @@
             $('#bwb-addr-province').val(prov);state.address_province=prov;
             $('#bwb-addr-postal').val(postal);state.address_postal=postal;
 
-            // Try to match the resolved city to a known town in the dropdown.
-            // If found, trigger that selection so the zone fee is applied.
             var matched = matchTownDropdown(city);
             if (!matched && place.geometry) {
-                // Fall back to polygon detection
                 detectZone(place.geometry.location.lat(), place.geometry.location.lng());
             }
 
@@ -340,23 +292,19 @@
         });
     }
 
-    /**
-     * Try to find the city name in the town dropdown options.
-     * Returns true if a match was found and applied.
-     */
     function matchTownDropdown(city) {
         if (!city) return false;
         var cityLower = city.toLowerCase().trim();
         var matched   = false;
         $('#bwb-town-select option').each(function () {
             var val = $(this).val();
-            if (!val) return; // skip blank option
+            if (!val) return;
             var parts    = val.split('|');
             var townName = (parts[0] || '').toLowerCase().trim();
             if (townName === cityLower) {
                 $('#bwb-town-select').val(val).trigger('change');
                 matched = true;
-                return false; // break $.each
+                return false;
             }
         });
         return matched;
@@ -411,7 +359,6 @@
         }
         var bin=BWB.bins[state.bin_id];
         if(bin&&!bin.no_duration&&!state.duration) e.push('Please select how many days you need the bin.');
-        if(!state.delivery_time)   e.push('Please select a delivery time window.');
         if(!state.bin_location)    e.push('Please select where you want the bin placed.');
         if(!state.address_line1)   e.push('Please enter your street address.');
         if(!state.address_city)    e.push('Please enter your city.');
@@ -423,7 +370,6 @@
     /* ── Submit ───────────────────────────────────────────────── */
     function submitBooking(){
         clearNotice();
-        // Sync any un-listened fields
         state.additional_note = $('#bwb-additional-note').val();
         state.agreed_terms    = $('#bwb-agreed-terms').is(':checked');
 
@@ -439,15 +385,11 @@
             data: {
                 action:'bwb_add_to_cart', nonce:BWB.nonce,
                 bin_id:state.bin_id, delivery_date:state.delivery_date,
-                duration:state.duration, delivery_time:state.delivery_time,
-                driveway_pads:state.driveway_pads?'yes':'no',
-                mattresses:state.mattresses?'yes':'no',
-                mattress_qty:state.mattress_qty,
+                duration:state.duration,
                 'bin_contents[]':state.bin_contents,
                 bin_contents_other:state.bin_contents_other,
                 bin_location:state.bin_location,
                 bin_location_other:state.bin_location_other,
-                cancellation:state.cancellation?'yes':'no',
                 address_line1:state.address_line1, address_city:state.address_city,
                 address_province:state.address_province, address_postal:state.address_postal,
                 delivery_zone:state.delivery_zone, zone_fee:state.zone_fee,

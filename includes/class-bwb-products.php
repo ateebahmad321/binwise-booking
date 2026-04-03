@@ -10,7 +10,7 @@ class BWB_Products {
                 'id'          => 'load_go_12',
                 'name'        => '9 YARD CONCRETE BIN',
                 'size'        => '9',
-                'price'       => 379,
+                'price'       => 369,
                 'old_price'   => null,
                 'dimensions'  => "9 Cubic Yards 2.5' H / 7' W / 14' L",
                  'tonnage'     => 'Unlimited Tonnage, Clean Concrete Recycling',
@@ -49,7 +49,7 @@ class BWB_Products {
                 'id'          => 'clean_sod_dirt_4',
                 'name'        => '30 YARD BIN',
                 'size'        => '30',
-                'price'       => 479,
+                'price'       => 439,
                 'old_price'   => null,
                 'dimensions'  => "30 Cubic Yards 7' H / 7.5' W / 16' L ",
                 'tonnage'     => 'Includes 2 metric tonnes, additional tonnage pro-rated at $85/metric tonne',
@@ -67,7 +67,7 @@ class BWB_Products {
                 'id'          => 'clean_concrete_4',
                 'name'        => '40 YARD BIN',
                 'size'        => '40',
-                'price'       => 539,
+                'price'       => 569,
                 'old_price'   => null,
                 'dimensions'  => '40 Cubic Yards',
                 'tonnage'     => 'Includes 3 metric tonnes, additional tonnage pro-rated at $85/metric tonne',
@@ -85,10 +85,9 @@ class BWB_Products {
 
     public static function get_durations() {
         return [
-            '24_hours'    => [ 'label' => '24 Hours – Included (Weekdays Only)', 'price' => 0 ],
-            '3_days'      => [ 'label' => '3 Days',                              'price' => 10 ],
-            '7_days'      => [ 'label' => '7 Days',                              'price' => 40 ],
-            'long_term_7' => [ 'label' => 'Long Term (first 7 days + $10/additional day)', 'price' => 40 ],
+            '24_hours' => [ 'label' => '24 Hours – Included (Weekdays Only)', 'price' => 0  ],
+            '3_days'   => [ 'label' => '3 Days',                              'price' => 30 ],
+            '7_days'   => [ 'label' => '7 Days',                              'price' => 60 ],
         ];
     }
 
@@ -107,12 +106,11 @@ class BWB_Products {
 
     public static function get_bin_contents() {
         return [
-            'shingles'       => 'Shingles',
-            'flooring'       => 'Flooring',
-            'drywall'        => 'Drywall',
-            'trees_branches' => 'Trees and Branches',
-            'household_junk' => 'Household Junk',
-            'other'          => 'Other',
+            'roofing'          => 'Roofing Materials',
+            'construction'     => 'Construction and Demolition',
+            'yard_waste'       => 'Yard Waste (tree branches, grass, clippings, organic yard waste)',
+            'household_junk'   => 'Household Junk',
+            'concrete'         => 'Concrete (Only for Concrete Bin)',
         ];
     }
 
@@ -175,17 +173,6 @@ class BWB_Products {
             $dur = self::get_durations()[ $data['duration'] ?? '' ] ?? null;
             if ( $dur ) $total += $dur['price'];
         }
-
-        $time = self::get_delivery_times()[ $data['delivery_time'] ?? '' ] ?? null;
-        if ( $time ) $total += $time['price'];
-
-        if ( ! empty($data['driveway_pads']) ) $total += 20;
-
-        $mp  = self::get_mattress_prices();
-        $qty = intval( $data['mattress_qty'] ?? 0 );
-        if ( $qty > 0 && isset($mp[$qty]) ) $total += $mp[$qty];
-
-        if ( ! empty($data['cancellation']) ) $total += 5;
 
         $total += floatval( $data['zone_fee'] ?? 0 );
 
