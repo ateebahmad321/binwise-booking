@@ -56,7 +56,6 @@ class BWB_Products {
                 'notes'       => [
                     'Perfect for small to medium projects',
                     'Home Remodel & Clean Outs',
-                    
                 ],
                 'no_duration' => true,
             ],
@@ -73,7 +72,6 @@ class BWB_Products {
                 'notes'       => [
                     'Perfect for large scale jobs site cleanupsum',
                     'Larger Job Site Cleanups',
-                    
                 ],
                 'no_duration' => true,
             ],
@@ -125,9 +123,39 @@ class BWB_Products {
 
     public static function get_zones() {
         return [
-            'zone_blue'  => [ 'label' => 'Blue',  'color' => '#065c9d', 'desc' => 'Edmonton, St. Albert, Sherwood Park, Spruce Grove',                  'price' => 0  ],
-            'zone_green' => [ 'label' => 'Green', 'color' => '#2e8657', 'desc' => 'Ardrossan, Namao, Villeneuve, Stony Plain, Beaumont',                'price' => 50 ],
+            'zone_blue'  => [ 'label' => 'Blue',  'color' => '#065c9d', 'desc' => 'Edmonton, St. Albert, Sherwood Park, Spruce Grove, Lancaster Park', 'price' => 0  ],
+            'zone_green' => [ 'label' => 'Green', 'color' => '#2e8657', 'desc' => 'Ardrossan, Namao, Villeneuve, Stony Plain, Nisku, Beaumont',         'price' => 50 ],
             'zone_red'   => [ 'label' => 'Red',   'color' => '#b34e3d', 'desc' => 'Morinville, Bon Accord, Gibbons, Fort Sask., Cooking Lake, Leduc',   'price' => 75 ],
+        ];
+    }
+
+    /**
+     * Towns available in the dropdown, grouped by zone.
+     * 'free' towns are included at no extra charge.
+     * 'green' towns add $50, 'red' towns add $75.
+     */
+    public static function get_town_zones() {
+        return [
+            // Free / Blue zone
+            'Edmonton'       => [ 'zone' => 'Blue',  'fee' => 0  ],
+            'St. Albert'     => [ 'zone' => 'Blue',  'fee' => 0  ],
+            'Sherwood Park'  => [ 'zone' => 'Blue',  'fee' => 0  ],
+            'Spruce Grove'   => [ 'zone' => 'Blue',  'fee' => 0  ],
+            'Lancaster Park' => [ 'zone' => 'Blue',  'fee' => 0  ],
+            // Green zone (+$50)
+            'Ardrossan'      => [ 'zone' => 'Green', 'fee' => 50 ],
+            'Namao'          => [ 'zone' => 'Green', 'fee' => 50 ],
+            'Villeneuve'     => [ 'zone' => 'Green', 'fee' => 50 ],
+            'Stony Plain'    => [ 'zone' => 'Green', 'fee' => 50 ],
+            'Nisku'          => [ 'zone' => 'Green', 'fee' => 50 ],
+            'Beaumont'       => [ 'zone' => 'Green', 'fee' => 50 ],
+            // Red zone (+$75)
+            'Morinville'     => [ 'zone' => 'Red',   'fee' => 75 ],
+            'Bon Accord'     => [ 'zone' => 'Red',   'fee' => 75 ],
+            'Gibbons'        => [ 'zone' => 'Red',   'fee' => 75 ],
+            'Fort Saskatchewan' => [ 'zone' => 'Red', 'fee' => 75 ],
+            'Cooking Lake'   => [ 'zone' => 'Red',   'fee' => 75 ],
+            'Leduc'          => [ 'zone' => 'Red',   'fee' => 75 ],
         ];
     }
 
