@@ -36,19 +36,20 @@ class BWB_Shortcode {
         );
 
         wp_localize_script( 'bwb-booking', 'BWB', [
-            'ajax_url'    => admin_url( 'admin-ajax.php' ),
-            'nonce'       => wp_create_nonce( 'bwb_nonce' ),
-            'checkout_url'=> wc_get_checkout_url(),
-            'maps_key'    => $maps_key,
-            'disable_sun' => get_option( 'bwb_disable_sundays', '1' ),
+            'ajax_url'      => admin_url( 'admin-ajax.php' ),
+            'nonce'         => wp_create_nonce( 'bwb_nonce' ),
+            'checkout_url'  => wc_get_checkout_url(),
+            'maps_key'      => $maps_key,
+            'disable_sun'   => get_option( 'bwb_disable_sundays', '1' ),
             'contact_phone' => get_option( 'bwb_contact_phone', '587-405-7545' ),
-            'bins'        => BWB_Products::get_bins(),
-            'durations'   => BWB_Products::get_durations(),
-            'times'       => BWB_Products::get_delivery_times(),
+            'bins'          => BWB_Products::get_bins(),
+            'durations'     => BWB_Products::get_durations(),
+            'times'         => BWB_Products::get_delivery_times(),
             'mattress_prices' => BWB_Products::get_mattress_prices(),
-            'contents'    => BWB_Products::get_bin_contents(),
-            'locations'   => BWB_Products::get_bin_locations(),
-            'zones'       => BWB_Products::get_zones(),
+            'contents'      => BWB_Products::get_bin_contents(),
+            'locations'     => BWB_Products::get_bin_locations(),
+            'zones'         => BWB_Products::get_zones(),
+            'town_zones'    => BWB_Products::get_town_zones(),
         ]);
 
         ob_start();
