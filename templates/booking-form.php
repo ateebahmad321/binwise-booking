@@ -117,6 +117,48 @@
         <div class="bwb-section">
             <div class="bwb-section__title">Delivery Address <span class="bwb-req">*</span></div>
 
+            <!-- Town / City Dropdown -->
+            <div style="margin-bottom:14px;">
+                <label class="bwb-label" for="bwb-town-select">Select Your City / Town <span class="bwb-req">*</span></label>
+                <select id="bwb-town-select" name="town_select" class="bwb-input">
+                    <option value="">— Select your city or town —</option>
+                    <optgroup label="Included in Price">
+                        <option value="Edmonton|Blue|0">Edmonton</option>
+                        <option value="St. Albert|Blue|0">St. Albert</option>
+                        <option value="Sherwood Park|Blue|0">Sherwood Park</option>
+                        <option value="Spruce Grove|Blue|0">Spruce Grove</option>
+                        <option value="Lancaster Park|Blue|0">Lancaster Park</option>
+                    </optgroup>
+                    <optgroup label="Outside Region (+$50)">
+                        <option value="Ardrossan|Green|50">Ardrossan (+$50)</option>
+                        <option value="Namao|Green|50">Namao (+$50)</option>
+                        <option value="Villeneuve|Green|50">Villeneuve (+$50)</option>
+                        <option value="Stony Plain|Green|50">Stony Plain (+$50)</option>
+                        <option value="Nisku|Green|50">Nisku (+$50)</option>
+                        <option value="Beaumont|Green|50">Beaumont (+$50)</option>
+                    </optgroup>
+                    <optgroup label="Outside Region (+$75)">
+                        <option value="Morinville|Red|75">Morinville (+$75)</option>
+                        <option value="Bon Accord|Red|75">Bon Accord (+$75)</option>
+                        <option value="Gibbons|Red|75">Gibbons (+$75)</option>
+                        <option value="Fort Saskatchewan|Red|75">Fort Saskatchewan (+$75)</option>
+                        <option value="Cooking Lake|Red|75">Cooking Lake (+$75)</option>
+                        <option value="Leduc|Red|75">Leduc (+$75)</option>
+                    </optgroup>
+                </select>
+
+                <!-- Zone fee badge — shown after selection -->
+                <div id="bwb-zone-badge" style="display:none; margin-top:8px;" aria-live="polite"></div>
+
+                <p class="bwb-hint" style="margin-top:6px;">
+                    If you do not see your city/town, please
+                    <a href="tel:<?php echo esc_attr( preg_replace('/\D/', '', get_option('bwb_contact_phone','587-405-7545') ) ); ?>" style="color:var(--bwb-primary-dark);font-weight:600;">call</a>
+                    or <a href="mailto:<?php echo esc_attr( get_option('bwb_contact_email','') ); ?>" style="color:var(--bwb-primary-dark);font-weight:600;">email</a>
+                    us — we may still be able to help.
+                </p>
+            </div>
+
+            <!-- Google Maps search -->
             <div style="margin-bottom:14px;">
                 <label class="bwb-label" for="bwb-address-search">Search address</label>
                 <input type="search" id="bwb-address-search" class="bwb-input" placeholder="Start typing your address…" autocomplete="off">
@@ -131,6 +173,12 @@
                 <div>
                     <label class="bwb-label" for="bwb-addr-city">City <span class="bwb-req">*</span></label>
                     <input type="text" id="bwb-addr-city" name="address_city" class="bwb-input" required>
+                    <p class="bwb-hint" style="margin-top:5px;">
+                        If you do not see your city/town above, please
+                        <a href="tel:<?php echo esc_attr( preg_replace('/\D/', '', get_option('bwb_contact_phone','587-405-7545') ) ); ?>" style="color:var(--bwb-primary-dark);font-weight:600;">call</a>
+                        or <a href="mailto:<?php echo esc_attr( get_option('bwb_contact_email','') ); ?>" style="color:var(--bwb-primary-dark);font-weight:600;">email</a>
+                        us — we may still be able to help.
+                    </p>
                 </div>
                 <div>
                     <label class="bwb-label" for="bwb-addr-province">Province</label>
@@ -141,8 +189,6 @@
                     <input type="text" id="bwb-addr-postal" name="address_postal" class="bwb-input">
                 </div>
             </div>
-
-            
 
             <div style="margin-top:18px;">
                 <div class="bwb-section__title" style="margin-bottom:10px;">Is the Delivery Address the Same as Billing Address? <span class="bwb-req">*</span></div>

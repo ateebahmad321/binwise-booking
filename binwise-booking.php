@@ -1,4 +1,4 @@
-<?php
+<?php 
 /**
  * Plugin Name: BinWise Booking System
  * Description: Multi-step bin rental booking form that feeds into WooCommerce checkout.
