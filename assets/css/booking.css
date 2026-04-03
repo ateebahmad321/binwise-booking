@@ -171,6 +171,17 @@
   line-height: 1.5;
 }
 
+.bwb-bin-card__tonnage {
+  font-size: 12px;
+  color: var(--bwb-muted);
+  margin-top: 2px;
+  font-style: italic;
+}
+
+.bwb-bin-card.is-selected .bwb-bin-card__tonnage {
+  color: rgba(0,0,0,.55);
+}
+
 .bwb-bin-card.is-selected .bwb-bin-card__details {
   display: block !important;
   color: rgba(0,0,0,.72);

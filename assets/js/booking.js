@@ -56,7 +56,8 @@
                   '<div class="bwb-bin-card__thumb">' + img + '</div>' +
                   '<div class="bwb-bin-card__text">' +
                     '<div class="bwb-bin-card__name">' + esc(bin.name) + '</div>' +
-                    '<div class="bwb-bin-card__dim">' + esc(bin.dimensions) + '</div>' +
+'<div class="bwb-bin-card__dim">' + esc(bin.dimensions) + '</div>' +
+(bin.tonnage ? '<div class="bwb-bin-card__tonnage">' + esc(bin.tonnage) + '</div>' : '') +
                     details +
                   '</div>' +
                 '</div>' +
