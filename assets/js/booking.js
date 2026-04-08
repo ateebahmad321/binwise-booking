@@ -355,7 +355,7 @@
             var ts=new Date(state.delivery_date+'T00:00:00'),now=new Date();
             now.setHours(0,0,0,0);
             if(ts<now) e.push('Delivery date must be in the future.');
-            if(BWB.disable_sun==='1'&&ts.getDay()===0) e.push('We do not deliver on Sundays.');
+            
         }
         var bin=BWB.bins[state.bin_id];
         if(bin&&!bin.no_duration&&!state.duration) e.push('Please select how many days you need the bin.');

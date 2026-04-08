@@ -95,7 +95,7 @@ class BWB_Ajax {
         } else {
             $ts  = strtotime( $data['delivery_date'] );
             if ( $ts < strtotime('today') ) $errors[] = 'Delivery date must be in the future.';
-            if ( date('N', $ts) == 7 )      $errors[] = 'We do not deliver on Sundays.';
+            
         }
 
         $bin = $bins[$data['bin_id']] ?? null;

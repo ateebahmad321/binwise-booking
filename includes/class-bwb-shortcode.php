@@ -40,7 +40,7 @@ class BWB_Shortcode {
             'nonce'         => wp_create_nonce( 'bwb_nonce' ),
             'checkout_url'  => wc_get_checkout_url(),
             'maps_key'      => $maps_key,
-            'disable_sun'   => get_option( 'bwb_disable_sundays', '1' ),
+           
             'contact_phone' => get_option( 'bwb_contact_phone', '587-405-7545' ),
             'bins'          => BWB_Products::get_bins(),
             'durations'     => BWB_Products::get_durations(),

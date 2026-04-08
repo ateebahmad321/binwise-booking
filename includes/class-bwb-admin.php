@@ -133,16 +133,7 @@ class BWB_Admin {
                                    class="regular-text">
                         </td>
                     </tr>
-                    <tr>
-                        <th><label for="bwb_disable_sundays">Disable Sundays</label></th>
-                        <td>
-                            <label>
-                                <input type="checkbox" name="bwb_disable_sundays" value="1"
-                                    <?php checked( get_option( 'bwb_disable_sundays', '1' ), '1' ); ?>>
-                                Prevent booking on Sundays
-                            </label>
-                        </td>
-                    </tr>
+                    
                 </table>
                 <?php submit_button( 'Save Settings' ); ?>
             </form>
@@ -166,7 +157,7 @@ class BWB_Admin {
         if ( wp_verify_nonce( $_POST['_wpnonce'], 'bwb_save_settings' ) ) {
             update_option( 'bwb_google_maps_key', sanitize_text_field( $_POST['bwb_google_maps_key'] ?? '' ) );
             update_option( 'bwb_contact_phone',   sanitize_text_field( $_POST['bwb_contact_phone'] ?? '587-405-7545' ) );
-            update_option( 'bwb_disable_sundays', ! empty( $_POST['bwb_disable_sundays'] ) ? '1' : '0' );
+            
             add_settings_error( 'bwb_settings', 'saved', 'Settings saved.', 'success' );
         }
 
