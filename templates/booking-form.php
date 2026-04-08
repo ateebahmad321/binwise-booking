@@ -19,7 +19,7 @@
         <div class="bwb-section">
             <div class="bwb-section__title">What Day Would You Like The Bin Delivered? <span class="bwb-req">*</span></div>
             <input type="date" id="bwb-delivery-date" name="delivery_date" class="bwb-input" required>
-            <p class="bwb-hint">Weekdays only. No Sundays.</p>
+           
         </div>
 
         <!-- ── SECTION 3: Duration ───────────────────────────────── -->
