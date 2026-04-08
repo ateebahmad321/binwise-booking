@@ -10,8 +10,8 @@ class BWB_Admin {
 
     public static function add_menu() {
         add_menu_page(
-            'BinWise Booking',
-            'BinWise Booking',
+            'YellowBins Booking',
+            'YellowBins Booking',
             'manage_options',
             'bwb-bookings',
             [ __CLASS__, 'render_bookings_page' ],
@@ -43,7 +43,7 @@ class BWB_Admin {
         $rows  = $wpdb->get_results( "SELECT * FROM {$table} ORDER BY created_at DESC LIMIT 200" );
         ?>
         <div class="wrap">
-            <h1>BinWise Bookings</h1>
+            <h1>YellowBins Booking</h1>
             <table class="wp-list-table widefat fixed striped">
                 <thead>
                     <tr>
@@ -102,7 +102,7 @@ class BWB_Admin {
         $product_id = get_option( 'bwb_product_id', 'Not created yet' );
         ?>
         <div class="wrap">
-            <h1>BinWise Booking — Settings</h1>
+            <h1>YellowBins Booking — Settings</h1>
             <?php settings_errors( 'bwb_settings' ); ?>
 
             <h2>Setup Instructions</h2>
