@@ -528,3 +528,16 @@ select.bwb-input { cursor: pointer; }
   .bwb-checkout-wrap #wc-stripe-upe-form,
   .bwb-checkout-wrap .payment_box { min-width: 280px; }
 }
+
+
+@media (max-width: 767px) {
+    .bwb-bin-card__name {
+        font-size: 13px; /* adjust as needed */
+    }
+
+    .bwb-bin-card__thumb {
+        flex: 0 0 60px; /* smaller image on mobile */
+        max-width: 60px;
+        height: auto;
+    }
+}
