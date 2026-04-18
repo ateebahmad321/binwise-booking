@@ -13,7 +13,7 @@ class BWB_Products {
                 'price'       => 369,
                 'old_price'   => null,
                 'dimensions'  => "9 Cubic Yards 2.5' H / 7' W / 14' L",
-                 'tonnage'     => 'Unlimited Tonnage, Clean Concrete Recycling',
+                'tonnage'     => 'Unlimited Tonnage, Clean Concrete Recycling',
                 'description' => 'Concrete Only',
                 'uses'        => 'Same Day Service Avaliable',
                 'image'       => $img . 'bin-12.png',
@@ -61,7 +61,7 @@ class BWB_Products {
                     'Perfect for small to medium projects',
                     'Home Remodel & Clean Outs',
                 ],
-                'no_duration' => true,
+                // no_duration removed — duration selector now shown for this bin
             ],
             'clean_concrete_4' => [
                 'id'          => 'clean_concrete_4',
@@ -78,7 +78,7 @@ class BWB_Products {
                     'Perfect for large scale jobs site cleanupsum',
                     'Larger Job Site Cleanups',
                 ],
-                'no_duration' => true,
+                // no_duration removed — duration selector now shown for this bin
             ],
         ];
     }

@@ -327,7 +327,8 @@ class BWB_WooCommerce {
         }
         if ( empty( $booking ) || ! is_array( $booking ) ) return;
 
-        $rows = self::build_display_rows( $booking );
+        $rows         = self::build_display_rows( $booking );
+        $pricing_rows = self::build_pricing_rows( $booking );
         if ( empty( $rows ) ) return;
 
         echo '<h2 style="margin-top:32px;margin-bottom:12px;font-size:1.1rem;font-weight:700;">Bin Rental Details</h2>';
@@ -344,13 +345,36 @@ class BWB_WooCommerce {
             $i++;
         }
         echo '</table>';
+
+        // Pricing breakdown section
+        if ( ! empty( $pricing_rows ) ) {
+            echo '<h2 style="margin-top:28px;margin-bottom:12px;font-size:1.1rem;font-weight:700;">Pricing Breakdown</h2>';
+            echo '<table style="width:100%;border-collapse:collapse;font-size:14px;">';
+            $i = 0;
+            foreach ( $pricing_rows as $label => $value ) {
+                $is_total  = ( $label === 'Order Total' );
+                $bg        = $is_total ? '#fffbea' : ( $i % 2 === 0 ? '#fafafa' : '#ffffff' );
+                $fw_label  = $is_total ? '700' : '600';
+                $fw_value  = $is_total ? '800' : '400';
+                $border    = $is_total ? '2px solid #FCCC0A' : '1px solid #e6e6e6';
+                echo '<tr style="background:' . $bg . ';">';
+                echo '<th style="text-align:left;padding:9px 16px 9px 12px;border-bottom:' . $border . ';width:220px;font-weight:' . $fw_label . ';color:#444;vertical-align:top;">'
+                    . esc_html( $label ) . '</th>';
+                echo '<td style="padding:9px 12px;border-bottom:' . $border . ';color:#222;font-weight:' . $fw_value . ';vertical-align:top;text-align:right;">'
+                    . esc_html( $value ) . '</td>';
+                echo '</tr>';
+                $i++;
+            }
+            echo '</table>';
+        }
     }
 
     public static function admin_order_details( $order ) {
         $booking = get_post_meta( $order->get_id(), '_bwb_booking', true );
         if ( empty( $booking ) || ! is_array( $booking ) ) return;
 
-        $rows = self::build_display_rows( $booking );
+        $rows         = self::build_display_rows( $booking );
+        $pricing_rows = self::build_pricing_rows( $booking );
         if ( empty( $rows ) ) return;
 
         echo '<div class="address" style="margin-top:20px;">';
@@ -358,6 +382,18 @@ class BWB_WooCommerce {
         foreach ( $rows as $label => $value ) {
             echo '<p style="margin:4px 0;"><strong>' . esc_html( $label ) . ':</strong> ' . esc_html( $value ) . '</p>';
         }
+
+        if ( ! empty( $pricing_rows ) ) {
+            echo '<p style="margin-top:12px;margin-bottom:4px;"><strong>💰 Pricing Breakdown</strong></p>';
+            foreach ( $pricing_rows as $label => $value ) {
+                $is_total = ( $label === 'Order Total' );
+                $style    = $is_total
+                    ? 'margin:6px 0;padding:4px 0;border-top:2px solid #FCCC0A;font-size:1.05em;'
+                    : 'margin:4px 0;';
+                echo '<p style="' . $style . '"><strong>' . esc_html( $label ) . ':</strong> ' . esc_html( $value ) . '</p>';
+            }
+        }
+
         echo '</div>';
     }
 
@@ -379,12 +415,11 @@ class BWB_WooCommerce {
             $rows['Delivery Date'] = date( 'F j, Y', strtotime( $booking['delivery_date'] ) );
         }
 
-        /* 3. Rental Duration — hidden for flat-fee special bins */
+        /* 3. Rental Duration */
         if ( ! empty( $booking['duration'] ) && $booking['duration'] !== 'flat' ) {
             $dur = $durations[ $booking['duration'] ] ?? null;
             if ( $dur ) {
-                $rows['Rental Duration'] = $dur['label']
-                    . ( $dur['price'] > 0 ? '  (+$' . number_format( $dur['price'], 2 ) . ')' : '' );
+                $rows['Rental Duration'] = $dur['label'];
             }
         }
 
@@ -399,7 +434,12 @@ class BWB_WooCommerce {
             $rows['Delivery Address'] = $addr;
         }
 
-        /* 5. Bin Placement */
+        /* 5. Delivery Zone */
+        if ( ! empty( $booking['delivery_zone'] ) ) {
+            $rows['Delivery Zone'] = $booking['delivery_zone'];
+        }
+
+        /* 6. Bin Placement */
         $locs = BWB_Products::get_bin_locations();
         if ( ! empty( $booking['bin_location'] ) ) {
             $loc = $locs[ $booking['bin_location'] ] ?? $booking['bin_location'];
@@ -409,7 +449,7 @@ class BWB_WooCommerce {
             $rows['Bin Placement'] = $loc;
         }
 
-        /* 6. Bin Contents */
+        /* 7. Bin Contents */
         $content_labels = BWB_Products::get_bin_contents();
         $contents = array_map(
             function ( $k ) use ( $content_labels ) { return $content_labels[ $k ] ?? $k; },
@@ -420,15 +460,61 @@ class BWB_WooCommerce {
         }
         $rows['Bin Contents'] = ! empty( $contents ) ? implode( ', ', $contents ) : 'Not specified';
 
-        /* 7. Additional Notes */
+        /* 8. Additional Notes */
         if ( ! empty( $booking['additional_note'] ) ) {
             $rows['Additional Notes'] = $booking['additional_note'];
         }
 
-        /* 8. Order Total */
-        if ( ! empty( $booking['total_price'] ) ) {
-            $rows['Order Total'] = '$' . number_format( floatval( $booking['total_price'] ), 2 );
+        return $rows;
+    }
+
+    /**
+     * Build a label => value array for the full pricing breakdown.
+     * Shows each charge as a separate line item, then a grand total.
+     */
+    private static function build_pricing_rows( array $booking ) {
+        $bins      = BWB_Products::get_bins();
+        $bin       = $bins[ $booking['bin_id'] ?? '' ] ?? null;
+        $durations = BWB_Products::get_durations();
+
+        if ( ! $bin ) return [];
+
+        $rows      = [];
+        $running   = 0.0;
+
+        /* 1. Base bin price */
+        $base = floatval( $bin['price'] );
+        $rows[ $bin['name'] . ' (base price)' ] = '$' . number_format( $base, 2 );
+        $running += $base;
+
+        /* 2. Rental duration surcharge */
+        if ( ! empty( $booking['duration'] ) && $booking['duration'] !== 'flat' ) {
+            $dur = $durations[ $booking['duration'] ] ?? null;
+            if ( $dur ) {
+                if ( $dur['price'] > 0 ) {
+                    $rows[ 'Rental Duration — ' . $dur['label'] ] = '+$' . number_format( $dur['price'], 2 );
+                    $running += $dur['price'];
+                } else {
+                    $rows[ 'Rental Duration — ' . $dur['label'] ] = 'Included';
+                }
+            }
         }
+
+        /* 3. Delivery zone fee */
+        $zone_fee = floatval( $booking['zone_fee'] ?? 0 );
+        $zone     = $booking['delivery_zone'] ?? '';
+        if ( $zone_fee > 0 ) {
+            $rows[ 'Delivery Zone Fee — ' . $zone ] = '+$' . number_format( $zone_fee, 2 );
+            $running += $zone_fee;
+        } else {
+            $rows[ 'Delivery Zone — ' . ( $zone ?: 'Standard' ) ] = 'Included';
+        }
+
+        /* 4. Grand total */
+        $stored_total = floatval( $booking['total_price'] ?? 0 );
+        // Prefer the stored total (source of truth), fall back to the recalculated running total
+        $grand_total  = $stored_total > 0 ? $stored_total : $running;
+        $rows['Order Total'] = '$' . number_format( $grand_total, 2 );
 
         return $rows;
     }
