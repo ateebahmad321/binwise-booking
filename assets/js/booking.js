@@ -258,38 +258,106 @@
     }
 
     /* ── Google Maps ──────────────────────────────────────────── */
+
+    /**
+     * Uses the new PlaceAutocompleteElement (replaces deprecated Autocomplete).
+     * Falls back gracefully if the API isn't loaded.
+     */
     function initMapsAutocomplete() {
         if (typeof google === 'undefined' || !google.maps || !google.maps.places) return;
+
+        var searchWrap = document.getElementById('bwb-address-search');
+        if (!searchWrap) return;
+
+        // Replace the plain <input> with a PlaceAutocompleteElement widget.
+        // The widget renders its own input inside a shadow DOM; we hide the
+        // original <input> and insert the element right after it.
+        var placeAuto;
+        try {
+            placeAuto = new google.maps.places.PlaceAutocompleteElement({
+                componentRestrictions: { country: 'ca' },
+                types: ['address'],
+            });
+        } catch (e) {
+            // API version doesn't support PlaceAutocompleteElement — fall back silently.
+            initMapsAutocompleteLegacy();
+            return;
+        }
+
+        // Style the widget to match our inputs
+        placeAuto.style.cssText = [
+            'display:block',
+            'width:100%',
+            'border:1px solid #e6e6e6',
+            'border-radius:6px',
+            'font-size:14px',
+            'color:#222',
+            '--gmp-mat-color-surface:#fff',
+        ].join(';');
+
+        // Insert widget after the original search input and hide the original
+        searchWrap.style.display = 'none';
+        searchWrap.parentNode.insertBefore(placeAuto, searchWrap.nextSibling);
+
+        placeAuto.addEventListener('gmp-placeselect', function (evt) {
+            var place = evt.place;
+            if (!place) return;
+
+            // Fetch the fields we need
+            place.fetchFields({ fields: ['addressComponents', 'formattedAddress'] }).then(function () {
+                applyPlaceComponents(place.addressComponents || []);
+            }).catch(function () {
+                // If fetchFields fails, try using whatever is available
+                applyPlaceComponents(place.addressComponents || []);
+            });
+        });
+    }
+
+    /** Kept as fallback for environments where PlaceAutocompleteElement isn't available */
+    function initMapsAutocompleteLegacy() {
         var el = document.getElementById('bwb-address-search');
         if (!el) return;
+        /* global google */
         var ac = new google.maps.places.Autocomplete(el, {
             types: ['address'], componentRestrictions: { country: 'ca' }
         });
         ac.addListener('place_changed', function () {
             var place = ac.getPlace();
             if (!place || !place.address_components) return;
-            var sn='', rt='', city='', prov='AB', postal='';
-            place.address_components.forEach(function(c){
-                var t=c.types;
-                if(t.indexOf('street_number')>-1) sn=c.long_name;
-                if(t.indexOf('route')>-1) rt=c.long_name;
-                if(t.indexOf('locality')>-1) city=c.long_name;
-                if(t.indexOf('administrative_area_level_1')>-1) prov=c.short_name;
-                if(t.indexOf('postal_code')>-1) postal=c.long_name;
-            });
-            var line1=(sn+' '+rt).trim();
-            $('#bwb-addr-line1').val(line1); state.address_line1=line1;
-            $('#bwb-addr-city').val(city);   state.address_city=city;
-            $('#bwb-addr-province').val(prov);state.address_province=prov;
-            $('#bwb-addr-postal').val(postal);state.address_postal=postal;
-
-            var matched = matchTownDropdown(city);
-            if (!matched && place.geometry) {
-                detectZone(place.geometry.location.lat(), place.geometry.location.lng());
-            }
-
-            $('#bwb-map-status').text('✓ ' + line1 + ', ' + city);
+            applyPlaceComponents(place.address_components);
         });
+    }
+
+    /** Shared helper: read address_components and populate form fields */
+    function applyPlaceComponents(components) {
+        var sn = '', rt = '', city = '', prov = 'AB', postal = '';
+
+        components.forEach(function (c) {
+            var types = c.types || [];
+            var long  = c.longText  || c.long_name  || '';
+            var short = c.shortText || c.short_name || '';
+
+            if (types.indexOf('street_number') > -1)              sn     = long;
+            if (types.indexOf('route') > -1)                      rt     = long;
+            if (types.indexOf('locality') > -1)                   city   = long;
+            if (types.indexOf('administrative_area_level_1') > -1) prov  = short;
+            if (types.indexOf('postal_code') > -1)                postal = long;
+        });
+
+        var line1 = (sn + ' ' + rt).trim();
+        $('#bwb-addr-line1').val(line1);   state.address_line1   = line1;
+        $('#bwb-addr-city').val(city);     state.address_city    = city;
+        $('#bwb-addr-province').val(prov); state.address_province = prov;
+        $('#bwb-addr-postal').val(postal); state.address_postal  = postal;
+
+        var matched = matchTownDropdown(city);
+        if (!matched) {
+            // No polygon zone detection needed without lat/lng from new API;
+            // clear zone so user selects from dropdown.
+            $('#bwb-map-status').text('✓ Address filled — please confirm your city/town in the dropdown above.');
+        } else {
+            $('#bwb-map-status').text('✓ ' + line1 + ', ' + city);
+        }
     }
 
     function matchTownDropdown(city) {
@@ -304,122 +372,111 @@
             if (townName === cityLower) {
                 $('#bwb-town-select').val(val).trigger('change');
                 matched = true;
-                return false;
+                return false; // break $.each
             }
         });
         return matched;
     }
 
-    function detectZone(lat,lng){
-        var zones=[
-            {label:'Blue', fee:0,  pts:[[53.7155,-113.5539],[53.6888,-113.5048],[53.6888,-113.3659],[53.6168,-113.2199],[53.4384,-113.2199],[53.3961,-113.3301],[53.3959,-113.6458],[53.4532,-113.6891],[53.4532,-113.7656],[53.5302,-113.7649],[53.5318,-113.9548],[53.5901,-113.9537],[53.6313,-113.7539]]},
-            {label:'Green',fee:50, pts:[[53.7499,-113.6570],[53.7503,-113.4349],[53.7513,-113.3162],[53.7249,-113.2064],[53.6416,-113.1240],[53.4039,-113.1227],[53.3577,-113.2457],[53.3389,-113.3112],[53.3389,-113.4324],[53.3391,-113.5488],[53.3387,-113.6428],[53.3387,-113.6847],[53.3376,-113.7368],[53.4915,-113.8657],[53.4932,-114.0265],[53.6090,-114.0262],[53.6696,-113.8174]]},
-            {label:'Red',  fee:75, pts:[[53.6432,-114.1224],[53.8157,-113.6577],[53.8418,-113.4961],[53.8416,-113.3237],[53.7835,-113.1379],[53.6742,-113.0130],[53.3848,-113.0065],[53.2486,-113.2883],[53.2497,-113.4887],[53.2336,-113.4890],[53.2342,-113.6188],[53.2570,-113.6184],[53.2575,-113.8340],[53.3981,-113.9182],[53.4554,-114.1216]]},
-        ];
-        for(var i=0;i<zones.length;i++){
-            if(pip(lat,lng,zones[i].pts)){
-                state.delivery_zone=zones[i].label;
-                state.zone_fee=zones[i].fee;
-                var f=zones[i].fee===0?'Included':'+$'+zones[i].fee;
-                $('#bwb-map-status').text('📍 Zone: '+zones[i].label+' — '+f);
-                updateTotal(); return;
-            }
+    function waitForMaps(cb, n) {
+        n = n || 0;
+        if (typeof google !== 'undefined' && google.maps && google.maps.places) {
+            cb();
+        } else if (n < 40) {
+            setTimeout(function () { waitForMaps(cb, n + 1); }, 300);
         }
-        state.delivery_zone='Outside Standard Area'; state.zone_fee=300;
-        var ph=BWB.contact_phone||'587-405-7545';
-        $('#bwb-map-status').html('⚠️ Outside standard area. Call <a href="tel:'+ph.replace(/\D/g,'')+'" style="color:var(--bwb-primary-dark)">'+ph+'</a>');
-        updateTotal();
-    }
-
-    function pip(lat,lng,poly){
-        var inside=false,n=poly.length,j=n-1;
-        for(var i=0;i<n;i++){
-            var xi=poly[i][0],yi=poly[i][1],xj=poly[j][0],yj=poly[j][1];
-            if(((yi>lng)!==(yj>lng))&&(lat<(xj-xi)*(lng-yi)/(yj-yi)+xi)) inside=!inside;
-            j=i;
-        } return inside;
-    }
-
-    function waitForMaps(cb,n){
-        n=n||0;
-        if(typeof google!=='undefined'&&google.maps&&google.maps.places){cb();}
-        else if(n<40){setTimeout(function(){waitForMaps(cb,n+1);},300);}
     }
 
     /* ── Validation ───────────────────────────────────────────── */
-    function validate(){
-        var e=[];
-        if(!state.bin_id) e.push('Please select a bin size.');
-        if(!state.delivery_date) e.push('Please select a delivery date.');
+    function validate() {
+        var e = [];
+        if (!state.bin_id) e.push('Please select a bin size.');
+        if (!state.delivery_date) e.push('Please select a delivery date.');
         else {
-            var ts=new Date(state.delivery_date+'T00:00:00'),now=new Date();
-            now.setHours(0,0,0,0);
-            if(ts<now) e.push('Delivery date must be in the future.');
-            
+            var ts  = new Date(state.delivery_date + 'T00:00:00');
+            var now = new Date();
+            now.setHours(0, 0, 0, 0);
+            if (ts < now) e.push('Delivery date must be in the future.');
         }
-        var bin=BWB.bins[state.bin_id];
-        if(bin&&!bin.no_duration&&!state.duration) e.push('Please select how many days you need the bin.');
-        if(!state.bin_location)    e.push('Please select where you want the bin placed.');
-        if(!state.address_line1)   e.push('Please enter your street address.');
-        if(!state.address_city)    e.push('Please enter your city.');
-        if(!state.delivery_zone)   e.push('Please select your city / town from the dropdown so we can confirm your delivery area.');
-        if(!state.agreed_terms)    e.push('Please agree to the Rental Agreement.');
+        var bin = BWB.bins[state.bin_id];
+        if (bin && !bin.no_duration && !state.duration) e.push('Please select how many days you need the bin.');
+        if (!state.bin_location)  e.push('Please select where you want the bin placed.');
+        if (!state.address_line1) e.push('Please enter your street address.');
+        if (!state.address_city)  e.push('Please enter your city.');
+        if (!state.delivery_zone) e.push('Please select your city / town from the dropdown so we can confirm your delivery area.');
+        if (!state.agreed_terms)  e.push('Please agree to the Rental Agreement.');
         return e;
     }
 
     /* ── Submit ───────────────────────────────────────────────── */
-    function submitBooking(){
+    function submitBooking() {
         clearNotice();
         state.additional_note = $('#bwb-additional-note').val();
         state.agreed_terms    = $('#bwb-agreed-terms').is(':checked');
 
-        var errs=validate();
-        if(errs.length){ showNotice(errs.join('<br>'),'error'); $('html,body').animate({scrollTop:$('#bwb-notices').offset().top-20},300); return; }
+        var errs = validate();
+        if (errs.length) {
+            showNotice(errs.join('<br>'), 'error');
+            $('html,body').animate({ scrollTop: $('#bwb-notices').offset().top - 20 }, 300);
+            return;
+        }
 
-        var $btn=$('#bwb-submit');
-        $btn.addClass('is-loading').prop('disabled',true);
+        var $btn = $('#bwb-submit');
+        $btn.addClass('is-loading').prop('disabled', true);
         $btn.find('.bwb-submit-text').text('Processing…');
 
         $.ajax({
             url: BWB.ajax_url, method: 'POST', traditional: true,
             data: {
-                action:'bwb_add_to_cart', nonce:BWB.nonce,
-                bin_id:state.bin_id, delivery_date:state.delivery_date,
-                duration:state.duration,
-                'bin_contents[]':state.bin_contents,
-                bin_contents_other:state.bin_contents_other,
-                bin_location:state.bin_location,
-                bin_location_other:state.bin_location_other,
-                address_line1:state.address_line1, address_city:state.address_city,
-                address_province:state.address_province, address_postal:state.address_postal,
-                delivery_zone:state.delivery_zone, zone_fee:state.zone_fee,
-                same_billing:state.same_billing,
-                billing_line1:state.billing_line1, billing_city:state.billing_city,
-                billing_province:state.billing_province, billing_postal:state.billing_postal,
-                additional_note:state.additional_note,
-                agreed_terms:state.agreed_terms?'1':'',
+                action:              'bwb_add_to_cart',
+                nonce:               BWB.nonce,
+                bin_id:              state.bin_id,
+                delivery_date:       state.delivery_date,
+                duration:            state.duration,
+                'bin_contents[]':    state.bin_contents,
+                bin_contents_other:  state.bin_contents_other,
+                bin_location:        state.bin_location,
+                bin_location_other:  state.bin_location_other,
+                address_line1:       state.address_line1,
+                address_city:        state.address_city,
+                address_province:    state.address_province,
+                address_postal:      state.address_postal,
+                delivery_zone:       state.delivery_zone,
+                zone_fee:            state.zone_fee,
+                same_billing:        state.same_billing,
+                billing_line1:       state.billing_line1,
+                billing_city:        state.billing_city,
+                billing_province:    state.billing_province,
+                billing_postal:      state.billing_postal,
+                additional_note:     state.additional_note,
+                agreed_terms:        state.agreed_terms ? '1' : '',
             },
-            success:function(res){
-                if(res.success){ window.location.href=res.data.redirect; }
-                else {
-                    showNotice(res.data.message||'An error occurred. Please try again.','error');
-                    $btn.removeClass('is-loading').prop('disabled',false);
+            success: function (res) {
+                if (res.success) {
+                    window.location.href = res.data.redirect;
+                } else {
+                    showNotice(res.data.message || 'An error occurred. Please try again.', 'error');
+                    $btn.removeClass('is-loading').prop('disabled', false);
                     $btn.find('.bwb-submit-text').text('Continue to Checkout');
                 }
             },
-            error:function(){
-                showNotice('Network error. Please try again.','error');
-                $btn.removeClass('is-loading').prop('disabled',false);
+            error: function () {
+                showNotice('Network error. Please try again.', 'error');
+                $btn.removeClass('is-loading').prop('disabled', false);
                 $btn.find('.bwb-submit-text').text('Continue to Checkout');
             }
         });
     }
 
     /* ── Utilities ────────────────────────────────────────────── */
-    function setMinDate(){ var d=new Date(); d.setDate(d.getDate()+1); $('#bwb-delivery-date').attr('min',d.toISOString().slice(0,10)); }
-    function showNotice(msg,type){ $('#bwb-notices').html('<div class="bwb-notice bwb-notice--'+type+'">'+msg+'</div>'); }
-    function clearNotice(){ $('#bwb-notices').empty(); }
-    function fmt(n){ return parseFloat(n).toFixed(2); }
-    function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    function setMinDate() {
+        var d = new Date();
+        d.setDate(d.getDate() + 1);
+        $('#bwb-delivery-date').attr('min', d.toISOString().slice(0, 10));
+    }
+    function showNotice(msg, type) { $('#bwb-notices').html('<div class="bwb-notice bwb-notice--' + type + '">' + msg + '</div>'); }
+    function clearNotice()         { $('#bwb-notices').empty(); }
+    function fmt(n)  { return parseFloat(n).toFixed(2); }
+    function esc(s)  { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 })(jQuery);
