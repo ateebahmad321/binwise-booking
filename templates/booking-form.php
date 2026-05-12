@@ -19,7 +19,6 @@
         <div class="bwb-section">
             <div class="bwb-section__title">What Day Would You Like The Bin Delivered? <span class="bwb-req">*</span></div>
             <input type="date" id="bwb-delivery-date" name="delivery_date" class="bwb-input" required>
-           
         </div>
 
         <!-- ── SECTION 3: Duration ───────────────────────────────── -->
@@ -54,8 +53,8 @@
         <div class="bwb-section">
             <div class="bwb-section__title">Delivery Address <span class="bwb-req">*</span></div>
 
-            <!-- Town / City Dropdown -->
-            <div style="margin-bottom:14px;">
+            <!-- City / Town Dropdown -->
+            <div style="margin-bottom:18px;">
                 <label class="bwb-label" for="bwb-town-select">Select Your City / Town <span class="bwb-req">*</span></label>
                 <select id="bwb-town-select" name="town_select" class="bwb-input">
                     <option value="">— Select your city or town —</option>
@@ -84,50 +83,38 @@
                     </optgroup>
                 </select>
 
-                <!-- Zone fee badge — shown after selection -->
+                <!-- Zone fee badge -->
                 <div id="bwb-zone-badge" style="display:none; margin-top:8px;" aria-live="polite"></div>
 
                 <p class="bwb-hint" style="margin-top:6px;">
-                    If you do not see your city/town, please
-                    <a href="tel:<?php echo esc_attr( preg_replace('/\D/', '', get_option('bwb_contact_phone','587-405-7545') ) ); ?>" style="color:var(--bwb-primary-dark);font-weight:600;">call</a>
-                    or <a href="mailto:<?php echo esc_attr( get_option('bwb_contact_email','') ); ?>" style="color:var(--bwb-primary-dark);font-weight:600;">email</a>
-                    us — we may still be able to help.
+                    Don't see your city?
+                    <a href="tel:<?php echo esc_attr( preg_replace( '/\D/', '', get_option( 'bwb_contact_phone', '587-405-7545' ) ) ); ?>" style="color:var(--bwb-primary-dark);font-weight:600;">Call us</a>
+                    or <a href="mailto:<?php echo esc_attr( get_option( 'bwb_contact_email', '' ) ); ?>" style="color:var(--bwb-primary-dark);font-weight:600;">email us</a> — we may still be able to help.
                 </p>
             </div>
 
-            <!-- Google Maps search -->
-            <div style="margin-bottom:14px;">
-                <label class="bwb-label" for="bwb-address-search">Search address</label>
-                <input type="search" id="bwb-address-search" class="bwb-input" placeholder="Start typing your address…" autocomplete="off">
-                <div id="bwb-map-status" class="bwb-hint"></div>
-            </div>
-
+            <!-- Manual address fields -->
             <div class="bwb-grid">
-                <div>
+                <div style="grid-column: 1 / -1;">
                     <label class="bwb-label" for="bwb-addr-line1">Street Address <span class="bwb-req">*</span></label>
-                    <input type="text" id="bwb-addr-line1" name="address_line1" class="bwb-input" required>
+                    <input type="text" id="bwb-addr-line1" name="address_line1" class="bwb-input" placeholder="e.g. 123 Main Street" required autocomplete="street-address">
                 </div>
                 <div>
                     <label class="bwb-label" for="bwb-addr-city">City <span class="bwb-req">*</span></label>
-                    <input type="text" id="bwb-addr-city" name="address_city" class="bwb-input" required>
-                    <p class="bwb-hint" style="margin-top:5px;">
-                        If you do not see your city/town above, please
-                        <a href="tel:<?php echo esc_attr( preg_replace('/\D/', '', get_option('bwb_contact_phone','587-405-7545') ) ); ?>" style="color:var(--bwb-primary-dark);font-weight:600;">call</a>
-                        or <a href="mailto:<?php echo esc_attr( get_option('bwb_contact_email','') ); ?>" style="color:var(--bwb-primary-dark);font-weight:600;">email</a>
-                        us — we may still be able to help.
-                    </p>
-                </div>
-                <div>
-                    <label class="bwb-label" for="bwb-addr-province">Province</label>
-                    <input type="text" id="bwb-addr-province" name="address_province" class="bwb-input" value="AB">
+                    <input type="text" id="bwb-addr-city" name="address_city" class="bwb-input" placeholder="e.g. Edmonton" required autocomplete="address-level2">
                 </div>
                 <div>
                     <label class="bwb-label" for="bwb-addr-postal">Postal Code</label>
-                    <input type="text" id="bwb-addr-postal" name="address_postal" class="bwb-input">
+                    <input type="text" id="bwb-addr-postal" name="address_postal" class="bwb-input" placeholder="e.g. T5A 0A1" autocomplete="postal-code">
+                </div>
+                <div>
+                    <label class="bwb-label" for="bwb-addr-province">Province</label>
+                    <input type="text" id="bwb-addr-province" name="address_province" class="bwb-input" value="AB" autocomplete="address-level1">
                 </div>
             </div>
 
-            <div style="margin-top:18px;">
+            <!-- Billing address toggle -->
+            <div style="margin-top:22px;">
                 <div class="bwb-section__title" style="margin-bottom:10px;">Is the Delivery Address the Same as Billing Address? <span class="bwb-req">*</span></div>
                 <div class="bwb-segmented" role="group">
                     <label class="bwb-seg-btn">
@@ -144,27 +131,27 @@
             <div id="bwb-billing-address-wrap" style="display:none; margin-top:16px;">
                 <div class="bwb-section__title" style="margin-bottom:10px;">Billing Address</div>
                 <div class="bwb-grid">
-                    <div>
+                    <div style="grid-column: 1 / -1;">
                         <label class="bwb-label" for="bwb-bill-line1">Street Address</label>
-                        <input type="text" id="bwb-bill-line1" name="billing_line1" class="bwb-input">
+                        <input type="text" id="bwb-bill-line1" name="billing_line1" class="bwb-input" autocomplete="billing street-address">
                     </div>
                     <div>
                         <label class="bwb-label" for="bwb-bill-city">City</label>
-                        <input type="text" id="bwb-bill-city" name="billing_city" class="bwb-input">
+                        <input type="text" id="bwb-bill-city" name="billing_city" class="bwb-input" autocomplete="billing address-level2">
+                    </div>
+                    <div>
+                        <label class="bwb-label" for="bwb-bill-postal">Postal Code</label>
+                        <input type="text" id="bwb-bill-postal" name="billing_postal" class="bwb-input" autocomplete="billing postal-code">
                     </div>
                     <div>
                         <label class="bwb-label" for="bwb-bill-province">Province</label>
-                        <select id="bwb-bill-province" name="billing_province" class="bwb-input">
+                        <select id="bwb-bill-province" name="billing_province" class="bwb-input" autocomplete="billing address-level1">
                             <option value="AB" selected>Alberta</option>
                             <option value="BC">British Columbia</option>
                             <option value="MB">Manitoba</option>
                             <option value="ON">Ontario</option>
                             <option value="SK">Saskatchewan</option>
                         </select>
-                    </div>
-                    <div>
-                        <label class="bwb-label" for="bwb-bill-postal">Postal Code</label>
-                        <input type="text" id="bwb-bill-postal" name="billing_postal" class="bwb-input">
                     </div>
                 </div>
             </div>

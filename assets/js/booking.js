@@ -1,5 +1,6 @@
 /**
  * BinWise Booking — Single-page form JS
+ * v1.1.0 — No Google Maps, auto nonce refresh, robust error handling
  */
 (function ($) {
     'use strict';
@@ -15,6 +16,9 @@
         agreed_terms: false,
     };
 
+    // Live nonce — refreshed automatically when expired
+    var currentNonce = BWB.nonce;
+
     $(function () {
         buildBinCards();
         buildDurations();
@@ -23,15 +27,17 @@
         setMinDate();
         bindEvents();
         updateTotal();
-        waitForMaps(initMapsAutocomplete);
     });
 
-    /* ── Builders ─────────────────────────────────────────────── */
+    /* ══════════════════════════════════════════════════════════════
+       BUILDERS
+    ══════════════════════════════════════════════════════════════ */
+
     function buildBinCards() {
         var $c = $('#bwb-bins').empty();
         $.each(BWB.bins, function (id, bin) {
             var oldPrice = bin.old_price ? '<del>$' + fmt(bin.old_price) + '</del>' : '';
-            var details  = '';
+            var details;
             if (bin.notes && bin.notes.length) {
                 details = '<div class="bwb-bin-card__details"><ul>' +
                     bin.notes.map(function (n) { return '<li>' + esc(n) + '</li>'; }).join('') +
@@ -102,7 +108,10 @@
             (extra || '') + '</label>';
     }
 
-    /* ── Events ───────────────────────────────────────────────── */
+    /* ══════════════════════════════════════════════════════════════
+       EVENTS
+    ══════════════════════════════════════════════════════════════ */
+
     function bindEvents() {
 
         // Bin card
@@ -155,7 +164,7 @@
             }
         });
 
-        // Segmented — billing only
+        // Billing same/different toggle
         $(document).on('change', '.bwb-segmented input[type=radio]', function () {
             var name = $(this).attr('name'), val = $(this).val();
             if (name === 'same_billing') {
@@ -166,9 +175,11 @@
         });
 
         // Date
-        $(document).on('change', '#bwb-delivery-date', function () { state.delivery_date = $(this).val(); });
+        $(document).on('change', '#bwb-delivery-date', function () {
+            state.delivery_date = $(this).val();
+        });
 
-        // ── Town / City dropdown ──────────────────────────────────
+        // Town / City dropdown
         $(document).on('change', '#bwb-town-select', function () {
             var raw = $(this).val();
             if (!raw) {
@@ -187,7 +198,8 @@
             state.delivery_zone = zone;
             state.zone_fee      = fee;
 
-            if (townName) {
+            // Auto-fill city field when town is selected
+            if (townName && !$('#bwb-addr-city').val()) {
                 $('#bwb-addr-city').val(townName);
                 state.address_city = townName;
             }
@@ -208,30 +220,22 @@
                 .text(badgeText)
                 .show();
 
-            $('#bwb-map-status').empty();
             updateTotal();
         });
 
-        // Text inputs
-        $('#bwb-addr-line1').on('input',    function () { state.address_line1    = $(this).val(); });
-        $('#bwb-addr-city').on('input',     function () {
-            state.address_city = $(this).val();
-            if ($('#bwb-town-select').val()) {
-                $('#bwb-town-select').val('');
-                state.delivery_zone = '';
-                state.zone_fee      = 0;
-                $('#bwb-zone-badge').hide().empty();
-                updateTotal();
-            }
-        });
-        $('#bwb-addr-province').on('input', function () { state.address_province = $(this).val(); });
-        $('#bwb-addr-postal').on('input',   function () { state.address_postal   = $(this).val(); });
-        $('#bwb-location-other').on('input',function () { state.bin_location_other = $(this).val(); });
-        $('#bwb-additional-note').on('input',function(){ state.additional_note   = $(this).val(); });
-        $('#bwb-bill-line1').on('input',    function () { state.billing_line1    = $(this).val(); });
-        $('#bwb-bill-city').on('input',     function () { state.billing_city     = $(this).val(); });
-        $('#bwb-bill-province').on('change',function () { state.billing_province = $(this).val(); });
-        $('#bwb-bill-postal').on('input',   function () { state.billing_postal   = $(this).val(); });
+        // Address text inputs
+        $('#bwb-addr-line1').on('input',     function () { state.address_line1    = $(this).val(); });
+        $('#bwb-addr-city').on('input',      function () { state.address_city     = $(this).val(); });
+        $('#bwb-addr-province').on('input',  function () { state.address_province = $(this).val(); });
+        $('#bwb-addr-postal').on('input',    function () { state.address_postal   = $(this).val(); });
+        $('#bwb-location-other').on('input', function () { state.bin_location_other = $(this).val(); });
+        $('#bwb-additional-note').on('input',function () { state.additional_note  = $(this).val(); });
+
+        // Billing text inputs
+        $('#bwb-bill-line1').on('input',     function () { state.billing_line1    = $(this).val(); });
+        $('#bwb-bill-city').on('input',      function () { state.billing_city     = $(this).val(); });
+        $('#bwb-bill-province').on('change', function () { state.billing_province = $(this).val(); });
+        $('#bwb-bill-postal').on('input',    function () { state.billing_postal   = $(this).val(); });
 
         // Terms
         $(document).on('change', '#bwb-agreed-terms', function () {
@@ -243,9 +247,13 @@
         $('#bwb-submit').on('click', submitBooking);
     }
 
-    /* ── Price ────────────────────────────────────────────────── */
+    /* ══════════════════════════════════════════════════════════════
+       PRICE
+    ══════════════════════════════════════════════════════════════ */
+
     function calcTotal() {
-        var bin = BWB.bins[state.bin_id]; if (!bin) return 0;
+        var bin = BWB.bins[state.bin_id];
+        if (!bin) return 0;
         var t = bin.price;
         if (BWB.durations[state.duration]) t += BWB.durations[state.duration].price;
         t += parseFloat(state.zone_fee) || 0;
@@ -257,146 +265,20 @@
         $('#bwb-running-total, #bwb-submit-total').text(s);
     }
 
-    /* ── Google Maps ──────────────────────────────────────────── */
+    /* ══════════════════════════════════════════════════════════════
+       VALIDATION
+    ══════════════════════════════════════════════════════════════ */
 
-    /**
-     * Uses the new PlaceAutocompleteElement (replaces deprecated Autocomplete).
-     * Falls back gracefully if the API isn't loaded.
-     */
-    function initMapsAutocomplete() {
-        if (typeof google === 'undefined' || !google.maps || !google.maps.places) return;
-
-        var searchWrap = document.getElementById('bwb-address-search');
-        if (!searchWrap) return;
-
-        // Replace the plain <input> with a PlaceAutocompleteElement widget.
-        // The widget renders its own input inside a shadow DOM; we hide the
-        // original <input> and insert the element right after it.
-        var placeAuto;
-        try {
-            placeAuto = new google.maps.places.PlaceAutocompleteElement({
-                componentRestrictions: { country: 'ca' },
-                types: ['address'],
-            });
-        } catch (e) {
-            // API version doesn't support PlaceAutocompleteElement — fall back silently.
-            initMapsAutocompleteLegacy();
-            return;
-        }
-
-        // Style the widget to match our inputs
-        placeAuto.style.cssText = [
-            'display:block',
-            'width:100%',
-            'border:1px solid #e6e6e6',
-            'border-radius:6px',
-            'font-size:14px',
-            'color:#222',
-            '--gmp-mat-color-surface:#fff',
-        ].join(';');
-
-        // Insert widget after the original search input and hide the original
-        searchWrap.style.display = 'none';
-        searchWrap.parentNode.insertBefore(placeAuto, searchWrap.nextSibling);
-
-        placeAuto.addEventListener('gmp-placeselect', function (evt) {
-            var place = evt.place;
-            if (!place) return;
-
-            // Fetch the fields we need
-            place.fetchFields({ fields: ['addressComponents', 'formattedAddress'] }).then(function () {
-                applyPlaceComponents(place.addressComponents || []);
-            }).catch(function () {
-                // If fetchFields fails, try using whatever is available
-                applyPlaceComponents(place.addressComponents || []);
-            });
-        });
-    }
-
-    /** Kept as fallback for environments where PlaceAutocompleteElement isn't available */
-    function initMapsAutocompleteLegacy() {
-        var el = document.getElementById('bwb-address-search');
-        if (!el) return;
-        /* global google */
-        var ac = new google.maps.places.Autocomplete(el, {
-            types: ['address'], componentRestrictions: { country: 'ca' }
-        });
-        ac.addListener('place_changed', function () {
-            var place = ac.getPlace();
-            if (!place || !place.address_components) return;
-            applyPlaceComponents(place.address_components);
-        });
-    }
-
-    /** Shared helper: read address_components and populate form fields */
-    function applyPlaceComponents(components) {
-        var sn = '', rt = '', city = '', prov = 'AB', postal = '';
-
-        components.forEach(function (c) {
-            var types = c.types || [];
-            var long  = c.longText  || c.long_name  || '';
-            var short = c.shortText || c.short_name || '';
-
-            if (types.indexOf('street_number') > -1)              sn     = long;
-            if (types.indexOf('route') > -1)                      rt     = long;
-            if (types.indexOf('locality') > -1)                   city   = long;
-            if (types.indexOf('administrative_area_level_1') > -1) prov  = short;
-            if (types.indexOf('postal_code') > -1)                postal = long;
-        });
-
-        var line1 = (sn + ' ' + rt).trim();
-        $('#bwb-addr-line1').val(line1);   state.address_line1   = line1;
-        $('#bwb-addr-city').val(city);     state.address_city    = city;
-        $('#bwb-addr-province').val(prov); state.address_province = prov;
-        $('#bwb-addr-postal').val(postal); state.address_postal  = postal;
-
-        var matched = matchTownDropdown(city);
-        if (!matched) {
-            // No polygon zone detection needed without lat/lng from new API;
-            // clear zone so user selects from dropdown.
-            $('#bwb-map-status').text('✓ Address filled — please confirm your city/town in the dropdown above.');
-        } else {
-            $('#bwb-map-status').text('✓ ' + line1 + ', ' + city);
-        }
-    }
-
-    function matchTownDropdown(city) {
-        if (!city) return false;
-        var cityLower = city.toLowerCase().trim();
-        var matched   = false;
-        $('#bwb-town-select option').each(function () {
-            var val = $(this).val();
-            if (!val) return;
-            var parts    = val.split('|');
-            var townName = (parts[0] || '').toLowerCase().trim();
-            if (townName === cityLower) {
-                $('#bwb-town-select').val(val).trigger('change');
-                matched = true;
-                return false; // break $.each
-            }
-        });
-        return matched;
-    }
-
-    function waitForMaps(cb, n) {
-        n = n || 0;
-        if (typeof google !== 'undefined' && google.maps && google.maps.places) {
-            cb();
-        } else if (n < 40) {
-            setTimeout(function () { waitForMaps(cb, n + 1); }, 300);
-        }
-    }
-
-    /* ── Validation ───────────────────────────────────────────── */
     function validate() {
         var e = [];
         if (!state.bin_id) e.push('Please select a bin size.');
-        if (!state.delivery_date) e.push('Please select a delivery date.');
-        else {
+        if (!state.delivery_date) {
+            e.push('Please select a delivery date.');
+        } else {
             var ts  = new Date(state.delivery_date + 'T00:00:00');
             var now = new Date();
             now.setHours(0, 0, 0, 0);
-            if (ts < now) e.push('Delivery date must be in the future.');
+            if (ts < now) e.push('Delivery date must be today or in the future.');
         }
         var bin = BWB.bins[state.bin_id];
         if (bin && !bin.no_duration && !state.duration) e.push('Please select how many days you need the bin.');
@@ -408,7 +290,46 @@
         return e;
     }
 
-    /* ── Submit ───────────────────────────────────────────────── */
+    /* ══════════════════════════════════════════════════════════════
+       NONCE REFRESH
+       Called when the server tells us the nonce expired.
+       Fetches a fresh nonce silently, then retries the submission.
+    ══════════════════════════════════════════════════════════════ */
+
+    function refreshNonceAndRetry( $btn, retryCount ) {
+        retryCount = retryCount || 0;
+        if ( retryCount >= 2 ) {
+            // Give up after 2 refresh attempts
+            showNotice('Session error. Please refresh the page and try again.', 'error');
+            resetBtn($btn);
+            return;
+        }
+
+        $.ajax({
+            url:    BWB.ajax_url,
+            method: 'POST',
+            data:   { action: 'bwb_refresh_nonce' },
+            success: function (res) {
+                if (res && res.success && res.data && res.data.nonce) {
+                    currentNonce = res.data.nonce;
+                    // Retry the submission with the fresh nonce
+                    doSubmitAjax($btn, retryCount + 1);
+                } else {
+                    showNotice('Could not refresh your session. Please reload the page.', 'error');
+                    resetBtn($btn);
+                }
+            },
+            error: function () {
+                showNotice('Network error refreshing session. Please reload the page.', 'error');
+                resetBtn($btn);
+            }
+        });
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       SUBMIT
+    ══════════════════════════════════════════════════════════════ */
+
     function submitBooking() {
         clearNotice();
         state.additional_note = $('#bwb-additional-note').val();
@@ -425,11 +346,18 @@
         $btn.addClass('is-loading').prop('disabled', true);
         $btn.find('.bwb-submit-text').text('Processing…');
 
+        doSubmitAjax($btn, 0);
+    }
+
+    function doSubmitAjax($btn, retryCount) {
         $.ajax({
-            url: BWB.ajax_url, method: 'POST', traditional: true,
+            url:         BWB.ajax_url,
+            method:      'POST',
+            traditional: true,
+            timeout:     30000,   // 30 s — prevents "hung" requests looking like network errors
             data: {
                 action:              'bwb_add_to_cart',
-                nonce:               BWB.nonce,
+                nonce:               currentNonce,
                 bin_id:              state.bin_id,
                 delivery_date:       state.delivery_date,
                 duration:            state.duration,
@@ -451,32 +379,97 @@
                 additional_note:     state.additional_note,
                 agreed_terms:        state.agreed_terms ? '1' : '',
             },
+
             success: function (res) {
-                if (res.success) {
-                    window.location.href = res.data.redirect;
-                } else {
-                    showNotice(res.data.message || 'An error occurred. Please try again.', 'error');
-                    $btn.removeClass('is-loading').prop('disabled', false);
-                    $btn.find('.bwb-submit-text').text('Continue to Checkout');
+                // Guard against HTML / non-JSON responses (PHP warnings, caching, etc.)
+                if (typeof res !== 'object' || res === null) {
+                    showNotice('Unexpected server response. Please try again or call us directly.', 'error');
+                    resetBtn($btn);
+                    return;
                 }
+
+                // ── Nonce expired: auto-refresh and retry ──────────────
+                if (res.success && res.data && res.data.__bwb_error) {
+                    var code = res.data.code || '';
+
+                    if (code === 'nonce_expired' || code === 'nonce_missing') {
+                        // Server may have already given us a fresh nonce
+                        if (res.data.fresh_nonce) {
+                            currentNonce = res.data.fresh_nonce;
+                            doSubmitAjax($btn, retryCount + 1);
+                        } else {
+                            refreshNonceAndRetry($btn, retryCount);
+                        }
+                        return;
+                    }
+
+                    // Other logical error from the server
+                    showNotice(res.data.message || 'An error occurred. Please try again.', 'error');
+                    resetBtn($btn);
+                    return;
+                }
+
+                // ── Normal WC error (validation, product missing, etc.) ─
+                if (!res.success) {
+                    showNotice((res.data && res.data.message) || 'An error occurred. Please try again.', 'error');
+                    resetBtn($btn);
+                    return;
+                }
+
+                // ── Success ────────────────────────────────────────────
+                window.location.href = res.data.redirect;
             },
-            error: function () {
-                showNotice('Network error. Please try again.', 'error');
-                $btn.removeClass('is-loading').prop('disabled', false);
-                $btn.find('.bwb-submit-text').text('Continue to Checkout');
+
+            error: function (xhr, status, err) {
+                // This fires for real network/server failures (timeout, 500, etc.)
+                var msg = 'Network error. Please try again.';
+
+                if (status === 'timeout') {
+                    msg = 'The request timed out. Please check your connection and try again.';
+                } else if (xhr.status === 500) {
+                    msg = 'Server error (500). Please try again in a moment or call us directly.';
+                } else if (xhr.status === 503) {
+                    msg = 'The server is temporarily unavailable. Please try again shortly.';
+                } else if (xhr.status === 0) {
+                    msg = 'No connection to server. Please check your internet and try again.';
+                }
+
+                showNotice(msg, 'error');
+                resetBtn($btn);
             }
         });
     }
 
-    /* ── Utilities ────────────────────────────────────────────── */
+    /* ══════════════════════════════════════════════════════════════
+       UTILITIES
+    ══════════════════════════════════════════════════════════════ */
+
     function setMinDate() {
         var d = new Date();
-        d.setDate(d.getDate() + 1);
+        // Allow today as a delivery date
         $('#bwb-delivery-date').attr('min', d.toISOString().slice(0, 10));
     }
-    function showNotice(msg, type) { $('#bwb-notices').html('<div class="bwb-notice bwb-notice--' + type + '">' + msg + '</div>'); }
-    function clearNotice()         { $('#bwb-notices').empty(); }
-    function fmt(n)  { return parseFloat(n).toFixed(2); }
-    function esc(s)  { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+    function resetBtn($btn) {
+        $btn.removeClass('is-loading').prop('disabled', false);
+        $btn.find('.bwb-submit-text').text('Continue to Checkout');
+    }
+
+    function showNotice(msg, type) {
+        $('#bwb-notices').html('<div class="bwb-notice bwb-notice--' + type + '">' + msg + '</div>');
+    }
+
+    function clearNotice() {
+        $('#bwb-notices').empty();
+    }
+
+    function fmt(n)  { return parseFloat(n || 0).toFixed(2); }
+    function esc(s)  {
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
 
 })(jQuery);

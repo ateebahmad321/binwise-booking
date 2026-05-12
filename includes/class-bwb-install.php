@@ -9,9 +9,7 @@ class BWB_Install {
         update_option( 'bwb_db_version', '1.0.0' );
     }
 
-    /** Run on every page load via plugins_loaded to catch missed activations */
     public static function ensure_table() {
-        // Only re-run if version is missing or mismatched
         if ( get_option( 'bwb_db_version' ) === '1.0.0' ) return;
         self::create_table();
         update_option( 'bwb_db_version', '1.0.0' );

@@ -3,12 +3,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 
 class BWB_WooCommerce {
 
-    /**
-     * In-memory cache: populated during checkout and shared across all hooks
-     * within the same PHP request. Key = order_id (or 0 before order exists).
-     *
-     * @var array|null
-     */
+    /** @var array|null In-memory booking cache for the current PHP request */
     private static $booking_cache = null;
 
     /* ══════════════════════════════════════════════════════════════
@@ -17,18 +12,26 @@ class BWB_WooCommerce {
 
     public static function init() {
 
-        /* ── Cart ─────────────────────────────────────────────── */
+        // ── Cart price override ────────────────────────────────────
         add_action( 'woocommerce_before_calculate_totals',
-            [ __CLASS__, 'set_cart_item_price' ], 10, 1 );
+            [ __CLASS__, 'set_cart_item_price' ], 20, 1 );
 
+        // Keep bwb_booking data alive across page loads from the session
         add_filter( 'woocommerce_get_cart_item_from_session',
             [ __CLASS__, 'restore_cart_item_from_session' ], 10, 2 );
 
+        // Show booking details in cart / mini-cart
         add_filter( 'woocommerce_get_item_data',
             [ __CLASS__, 'display_cart_item_meta' ], 10, 2 );
 
-        /* ── Checkout pipeline ───────────────────────────────── */
+        // ── CRITICAL: persist price on the order line item ─────────
+        // Without this the order stores $0 even though the cart showed
+        // the correct price, because WC re-reads the product's stored
+        // price (which is 0) when creating the order line item.
+        add_action( 'woocommerce_checkout_create_order_line_item',
+            [ __CLASS__, 'set_line_item_price' ], 10, 4 );
 
+        // ── Booking data pipeline ──────────────────────────────────
         add_action( 'woocommerce_checkout_create_order_line_item',
             [ __CLASS__, 'cache_booking_from_line_item' ], 10, 4 );
 
@@ -38,14 +41,14 @@ class BWB_WooCommerce {
         add_action( 'woocommerce_thankyou',
             [ __CLASS__, 'save_on_thankyou' ], 10, 1 );
 
-        /* ── Status sync ─────────────────────────────────────── */
+        // ── Status sync ────────────────────────────────────────────
         add_action( 'woocommerce_payment_complete',
             [ __CLASS__, 'on_payment_complete' ], 10, 1 );
 
         add_action( 'woocommerce_order_status_changed',
             [ __CLASS__, 'sync_status' ], 10, 3 );
 
-        /* ── Display ─────────────────────────────────────────── */
+        // ── Display ────────────────────────────────────────────────
         add_action( 'woocommerce_order_details_after_order_table',
             [ __CLASS__, 'display_order_booking' ], 10, 1 );
 
@@ -55,25 +58,30 @@ class BWB_WooCommerce {
         add_action( 'woocommerce_admin_order_data_after_shipping_address',
             [ __CLASS__, 'admin_order_details' ], 10, 1 );
 
-        /* ── Checkout pre-fill ───────────────────────────────── */
+        // ── Checkout pre-fill ──────────────────────────────────────
         add_filter( 'woocommerce_checkout_get_value',
             [ __CLASS__, 'prefill_checkout_fields' ], 10, 2 );
     }
 
     /* ══════════════════════════════════════════════════════════════
-       CART HOOKS
+       CART PRICE OVERRIDE
+       Called on every cart/checkout totals recalc.
     ══════════════════════════════════════════════════════════════ */
 
     public static function set_cart_item_price( $cart ) {
         if ( is_admin() && ! defined( 'DOING_AJAX' ) ) return;
+        if ( did_action( 'woocommerce_before_calculate_totals' ) >= 2 ) return;
+
         foreach ( $cart->get_cart() as $item ) {
-            if ( isset( $item['bwb_booking'] ) ) {
-                $item['data']->set_price( floatval( $item['bwb_booking']['total_price'] ?? 0 ) );
+            if ( isset( $item['bwb_booking'] ) && isset( $item['data'] ) ) {
+                $price = floatval( $item['bwb_booking']['total_price'] ?? 0 );
+                $item['data']->set_price( $price );
+                bwb_log( 'Cart price set', $price );
             }
         }
     }
 
-    /** Keep bwb_booking alive when WC rebuilds the cart from the session cookie. */
+    /** Keep bwb_booking alive when WC rebuilds the cart from the session cookie */
     public static function restore_cart_item_from_session( $cart_item, $session_values ) {
         if ( ! empty( $session_values['bwb_booking'] ) ) {
             $cart_item['bwb_booking'] = $session_values['bwb_booking'];
@@ -100,29 +108,61 @@ class BWB_WooCommerce {
     }
 
     /* ══════════════════════════════════════════════════════════════
-       CHECKOUT PIPELINE — STEP A
+       FIX: SET LINE ITEM PRICE ON ORDER
+       This is the critical fix for "cards saved but not charged".
+       WC reads the product price (0) when building order line items;
+       we override it here with the real booking total.
+    ══════════════════════════════════════════════════════════════ */
+
+    public static function set_line_item_price( $item, $cart_item_key, $values, $order ) {
+        if ( empty( $values['bwb_booking'] ) ) return;
+
+        $price = floatval( $values['bwb_booking']['total_price'] ?? 0 );
+
+        if ( $price <= 0 ) {
+            bwb_log( 'WARNING: line item price is 0 — booking total_price missing?', $values['bwb_booking'] );
+            return;
+        }
+
+        // Override the unit price and subtotals on the line item
+        $item->set_subtotal( $price );
+        $item->set_total( $price );
+
+        bwb_log( 'Line item price set on order', [
+            'price'    => $price,
+            'order_id' => $order ? $order->get_id() : 'unknown',
+        ] );
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       BOOKING DATA PIPELINE — STEP A
+       Cache booking data and write to order meta during checkout.
     ══════════════════════════════════════════════════════════════ */
 
     public static function cache_booking_from_line_item( $item, $cart_item_key, $values, $order ) {
         if ( empty( $values['bwb_booking'] ) ) return;
 
         self::$booking_cache = $values['bwb_booking'];
-
         $order->update_meta_data( '_bwb_booking', $values['bwb_booking'] );
+
+        bwb_log( 'Booking cached from line item for order', $order ? $order->get_id() : 'unknown' );
     }
 
     /* ══════════════════════════════════════════════════════════════
-       CHECKOUT PIPELINE — STEP B
+       BOOKING DATA PIPELINE — STEP B
     ══════════════════════════════════════════════════════════════ */
 
     public static function save_on_order_processed( $order_id, $posted_data, $order ) {
         if ( ! $order_id ) return;
-        if ( self::already_saved( $order_id ) ) return;
+        if ( self::already_saved( $order_id ) ) {
+            bwb_log( 'save_on_order_processed: already saved for order', $order_id );
+            return;
+        }
 
         $booking = self::resolve_booking( $order );
 
         if ( empty( $booking ) ) {
-            error_log( '[BWB] save_on_order_processed – no booking data for order #' . $order_id );
+            bwb_log( 'save_on_order_processed: no booking data for order', $order_id );
             return;
         }
 
@@ -130,7 +170,7 @@ class BWB_WooCommerce {
     }
 
     /* ══════════════════════════════════════════════════════════════
-       CHECKOUT PIPELINE — STEP C (fallback)
+       BOOKING DATA PIPELINE — STEP C (fallback)
     ══════════════════════════════════════════════════════════════ */
 
     public static function save_on_thankyou( $order_id ) {
@@ -141,45 +181,53 @@ class BWB_WooCommerce {
         if ( ! $order ) return;
 
         $booking = self::resolve_booking( $order );
-        if ( empty( $booking ) ) return;
+        if ( empty( $booking ) ) {
+            bwb_log( 'save_on_thankyou: no booking data for order', $order_id );
+            return;
+        }
 
         self::write_to_db( $order_id, $booking, $order );
     }
 
     /* ══════════════════════════════════════════════════════════════
-       BOOKING RESOLUTION — four layers, most-reliable first
+       BOOKING RESOLUTION — 4 layers, most reliable first
     ══════════════════════════════════════════════════════════════ */
 
     private static function resolve_booking( $order ) {
 
         // 1. In-memory static cache (same PHP request as checkout)
         if ( ! empty( self::$booking_cache ) && is_array( self::$booking_cache ) ) {
+            bwb_log( 'resolve_booking: using in-memory cache' );
             return self::$booking_cache;
         }
 
         // 2. Order meta (written in cache_booking_from_line_item)
         $booking = $order->get_meta( '_bwb_booking', true );
         if ( ! empty( $booking ) && is_array( $booking ) ) {
+            bwb_log( 'resolve_booking: using order meta' );
             return $booking;
         }
 
-        // 3. WC session (set in BWB_Ajax::add_to_cart)
+        // 3. WC session
         if ( WC()->session ) {
             $booking = WC()->session->get( 'bwb_booking' );
             if ( ! empty( $booking ) && is_array( $booking ) ) {
+                bwb_log( 'resolve_booking: using WC session' );
                 return $booking;
             }
         }
 
-        // 4. Live cart items (edge case: session not yet cleared)
+        // 4. Live cart items
         if ( WC()->cart ) {
             foreach ( WC()->cart->get_cart() as $ci ) {
                 if ( ! empty( $ci['bwb_booking'] ) && is_array( $ci['bwb_booking'] ) ) {
+                    bwb_log( 'resolve_booking: using live cart item' );
                     return $ci['bwb_booking'];
                 }
             }
         }
 
+        bwb_log( 'resolve_booking: no booking data found anywhere' );
         return null;
     }
 
@@ -188,7 +236,10 @@ class BWB_WooCommerce {
     ══════════════════════════════════════════════════════════════ */
 
     public static function write_to_db( $order_id, array $booking, $order = null ) {
-        if ( self::already_saved( $order_id ) ) return;
+        if ( self::already_saved( $order_id ) ) {
+            bwb_log( 'write_to_db: skipping, already saved', $order_id );
+            return;
+        }
 
         BWB_Install::ensure_table();
 
@@ -198,47 +249,44 @@ class BWB_WooCommerce {
 
         global $wpdb;
         $table = $wpdb->prefix . 'bwb_bookings';
+        $bins  = BWB_Products::get_bins();
+        $bin   = $bins[ $booking['bin_id'] ?? '' ] ?? null;
 
-        $bins     = BWB_Products::get_bins();
-        $bin      = $bins[ $booking['bin_id'] ?? '' ] ?? null;
-
-        // Flatten contents array
         $contents = implode( ', ', array_filter( (array) ( $booking['bin_contents'] ?? [] ) ) );
         if ( ! empty( $booking['bin_contents_other'] ) ) {
             $contents .= ( $contents ? ', ' : '' ) . $booking['bin_contents_other'];
         }
 
-        // Ensure delivery_date is a valid date string
         $delivery_date = $booking['delivery_date'] ?? '';
         if ( empty( $delivery_date ) || ! strtotime( $delivery_date ) ) {
             $delivery_date = current_time( 'Y-m-d' );
         }
 
-        $data   = [
+        $data = [
             'order_id'         => (int) $order_id,
-            'bin_size'         => $booking['bin_id']             ?? '',
-            'bin_label'        => $bin ? $bin['name']            : ( $booking['bin_id'] ?? '' ),
+            'bin_size'         => $booking['bin_id']           ?? '',
+            'bin_label'        => $bin ? $bin['name']          : ( $booking['bin_id'] ?? '' ),
             'delivery_date'    => $delivery_date,
-            'duration'         => $booking['duration']           ?? '',
+            'duration'         => $booking['duration']         ?? '',
             'delivery_time'    => '',
             'driveway_pads'    => 0,
             'mattresses'       => 0,
             'mattress_qty'     => 0,
             'bin_contents'     => $contents,
-            'bin_location'     => $booking['bin_location']       ?? '',
+            'bin_location'     => $booking['bin_location']     ?? '',
             'cancellation'     => 0,
-            'address_line1'    => $booking['address_line1']      ?? '',
-            'address_city'     => $booking['address_city']       ?? '',
-            'address_province' => $booking['address_province']   ?? '',
-            'address_postal'   => $booking['address_postal']     ?? '',
-            'delivery_zone'    => $booking['delivery_zone']      ?? '',
-            'zone_fee'         => floatval( $booking['zone_fee']     ?? 0 ),
-            'base_price'       => floatval( $bin['price']            ?? 0 ),
-            'total_price'      => floatval( $booking['total_price']  ?? 0 ),
+            'address_line1'    => $booking['address_line1']    ?? '',
+            'address_city'     => $booking['address_city']     ?? '',
+            'address_province' => $booking['address_province'] ?? '',
+            'address_postal'   => $booking['address_postal']   ?? '',
+            'delivery_zone'    => $booking['delivery_zone']    ?? '',
+            'zone_fee'         => floatval( $booking['zone_fee']    ?? 0 ),
+            'base_price'       => floatval( $bin['price']           ?? 0 ),
+            'total_price'      => floatval( $booking['total_price'] ?? 0 ),
             'customer_name'    => $order ? $order->get_formatted_billing_full_name() : '',
             'customer_email'   => $order ? $order->get_billing_email()               : '',
             'customer_phone'   => $order ? $order->get_billing_phone()               : '',
-            'additional_note'  => $booking['additional_note']    ?? '',
+            'additional_note'  => $booking['additional_note']  ?? '',
             'status'           => 'pending',
         ];
 
@@ -253,17 +301,17 @@ class BWB_WooCommerce {
         $result = $wpdb->insert( $table, $data, $formats );
 
         if ( $result === false ) {
-            error_log( '[BWB] DB insert FAILED for order #' . $order_id
-                . ' | wpdb error: ' . $wpdb->last_error );
+            bwb_log( 'DB insert FAILED for order #' . $order_id, $wpdb->last_error );
         } else {
             $row_id = $wpdb->insert_id;
+            bwb_log( 'Booking saved to DB row #' . $row_id . ' for order #' . $order_id );
 
-            update_post_meta( $order_id, '_bwb_db_saved', 1 );
+            update_post_meta( $order_id, '_bwb_db_saved',  1 );
             update_post_meta( $order_id, '_bwb_db_row_id', $row_id );
-            update_post_meta( $order_id, '_bwb_booking', $booking );
+            update_post_meta( $order_id, '_bwb_booking',   $booking );
 
             if ( $order ) {
-                $order->update_meta_data( '_bwb_booking', $booking );
+                $order->update_meta_data( '_bwb_booking',  $booking );
                 $order->update_meta_data( '_bwb_db_saved', 1 );
                 $order->save();
             }
@@ -272,12 +320,9 @@ class BWB_WooCommerce {
             if ( WC()->session ) {
                 WC()->session->set( 'bwb_booking', null );
             }
-
-            error_log( '[BWB] Booking saved to DB row #' . $row_id . ' for order #' . $order_id );
         }
     }
 
-    /** Returns true if a DB row has already been written for this order. */
     private static function already_saved( $order_id ) {
         return (bool) get_post_meta( $order_id, '_bwb_db_saved', true );
     }
@@ -287,6 +332,7 @@ class BWB_WooCommerce {
     ══════════════════════════════════════════════════════════════ */
 
     public static function on_payment_complete( $order_id ) {
+        bwb_log( 'Payment complete for order', $order_id );
         self::set_db_status( $order_id, 'confirmed' );
     }
 
@@ -301,6 +347,7 @@ class BWB_WooCommerce {
             'failed'     => 'cancelled',
         ];
         if ( isset( $map[ $new_status ] ) ) {
+            bwb_log( "Status sync order #{$order_id}: {$old_status} → {$new_status} → {$map[$new_status]}" );
             self::set_db_status( $order_id, $map[ $new_status ] );
         }
     }
@@ -317,7 +364,7 @@ class BWB_WooCommerce {
     }
 
     /* ══════════════════════════════════════════════════════════════
-       DISPLAY
+       DISPLAY — order confirmation, emails, admin
     ══════════════════════════════════════════════════════════════ */
 
     public static function display_order_booking( $order ) {
@@ -337,31 +384,26 @@ class BWB_WooCommerce {
         foreach ( $rows as $label => $value ) {
             $bg = ( $i % 2 === 0 ) ? '#fafafa' : '#ffffff';
             echo '<tr style="background:' . $bg . ';">';
-            echo '<th style="text-align:left;padding:9px 16px 9px 12px;border-bottom:1px solid #e6e6e6;width:220px;font-weight:600;color:#444;vertical-align:top;">'
-                . esc_html( $label ) . '</th>';
-            echo '<td style="padding:9px 12px;border-bottom:1px solid #e6e6e6;color:#222;vertical-align:top;">'
-                . esc_html( $value ) . '</td>';
+            echo '<th style="text-align:left;padding:9px 16px 9px 12px;border-bottom:1px solid #e6e6e6;width:220px;font-weight:600;color:#444;vertical-align:top;">' . esc_html( $label ) . '</th>';
+            echo '<td style="padding:9px 12px;border-bottom:1px solid #e6e6e6;color:#222;vertical-align:top;">' . esc_html( $value ) . '</td>';
             echo '</tr>';
             $i++;
         }
         echo '</table>';
 
-        // Pricing breakdown section
         if ( ! empty( $pricing_rows ) ) {
             echo '<h2 style="margin-top:28px;margin-bottom:12px;font-size:1.1rem;font-weight:700;">Pricing Breakdown</h2>';
             echo '<table style="width:100%;border-collapse:collapse;font-size:14px;">';
             $i = 0;
             foreach ( $pricing_rows as $label => $value ) {
-                $is_total  = ( $label === 'Order Total' );
-                $bg        = $is_total ? '#fffbea' : ( $i % 2 === 0 ? '#fafafa' : '#ffffff' );
-                $fw_label  = $is_total ? '700' : '600';
-                $fw_value  = $is_total ? '800' : '400';
-                $border    = $is_total ? '2px solid #FCCC0A' : '1px solid #e6e6e6';
+                $is_total = ( $label === 'Order Total' );
+                $bg       = $is_total ? '#fffbea' : ( $i % 2 === 0 ? '#fafafa' : '#ffffff' );
+                $fw_label = $is_total ? '700' : '600';
+                $fw_value = $is_total ? '800' : '400';
+                $border   = $is_total ? '2px solid #FCCC0A' : '1px solid #e6e6e6';
                 echo '<tr style="background:' . $bg . ';">';
-                echo '<th style="text-align:left;padding:9px 16px 9px 12px;border-bottom:' . $border . ';width:220px;font-weight:' . $fw_label . ';color:#444;vertical-align:top;">'
-                    . esc_html( $label ) . '</th>';
-                echo '<td style="padding:9px 12px;border-bottom:' . $border . ';color:#222;font-weight:' . $fw_value . ';vertical-align:top;text-align:right;">'
-                    . esc_html( $value ) . '</td>';
+                echo '<th style="text-align:left;padding:9px 16px 9px 12px;border-bottom:' . $border . ';width:220px;font-weight:' . $fw_label . ';color:#444;vertical-align:top;">' . esc_html( $label ) . '</th>';
+                echo '<td style="padding:9px 12px;border-bottom:' . $border . ';color:#222;font-weight:' . $fw_value . ';vertical-align:top;text-align:right;">' . esc_html( $value ) . '</td>';
                 echo '</tr>';
                 $i++;
             }
@@ -382,64 +424,46 @@ class BWB_WooCommerce {
         foreach ( $rows as $label => $value ) {
             echo '<p style="margin:4px 0;"><strong>' . esc_html( $label ) . ':</strong> ' . esc_html( $value ) . '</p>';
         }
-
         if ( ! empty( $pricing_rows ) ) {
             echo '<p style="margin-top:12px;margin-bottom:4px;"><strong>💰 Pricing Breakdown</strong></p>';
             foreach ( $pricing_rows as $label => $value ) {
                 $is_total = ( $label === 'Order Total' );
-                $style    = $is_total
-                    ? 'margin:6px 0;padding:4px 0;border-top:2px solid #FCCC0A;font-size:1.05em;'
-                    : 'margin:4px 0;';
+                $style    = $is_total ? 'margin:6px 0;padding:4px 0;border-top:2px solid #FCCC0A;font-size:1.05em;' : 'margin:4px 0;';
                 echo '<p style="' . $style . '"><strong>' . esc_html( $label ) . ':</strong> ' . esc_html( $value ) . '</p>';
             }
         }
-
         echo '</div>';
     }
 
-    /**
-     * Build a label => value array covering every booking field.
-     */
     private static function build_display_rows( array $booking ) {
         $bins      = BWB_Products::get_bins();
         $bin       = $bins[ $booking['bin_id'] ?? '' ] ?? null;
         $durations = BWB_Products::get_durations();
+        $rows      = [];
 
-        $rows = [];
-
-        /* 1. Bin */
         $rows['Bin'] = $bin ? $bin['name'] : ( $booking['bin_id'] ?? '—' );
 
-        /* 2. Delivery Date */
         if ( ! empty( $booking['delivery_date'] ) && strtotime( $booking['delivery_date'] ) ) {
             $rows['Delivery Date'] = date( 'F j, Y', strtotime( $booking['delivery_date'] ) );
         }
 
-        /* 3. Rental Duration */
         if ( ! empty( $booking['duration'] ) && $booking['duration'] !== 'flat' ) {
             $dur = $durations[ $booking['duration'] ] ?? null;
-            if ( $dur ) {
-                $rows['Rental Duration'] = $dur['label'];
-            }
+            if ( $dur ) $rows['Rental Duration'] = $dur['label'];
         }
 
-        /* 4. Delivery Address */
         $addr = implode( ', ', array_filter( [
             $booking['address_line1']    ?? '',
             $booking['address_city']     ?? '',
             $booking['address_province'] ?? '',
             $booking['address_postal']   ?? '',
         ] ) );
-        if ( $addr ) {
-            $rows['Delivery Address'] = $addr;
-        }
+        if ( $addr ) $rows['Delivery Address'] = $addr;
 
-        /* 5. Delivery Zone */
         if ( ! empty( $booking['delivery_zone'] ) ) {
             $rows['Delivery Zone'] = $booking['delivery_zone'];
         }
 
-        /* 6. Bin Placement */
         $locs = BWB_Products::get_bin_locations();
         if ( ! empty( $booking['bin_location'] ) ) {
             $loc = $locs[ $booking['bin_location'] ] ?? $booking['bin_location'];
@@ -449,18 +473,14 @@ class BWB_WooCommerce {
             $rows['Bin Placement'] = $loc;
         }
 
-        /* 7. Bin Contents */
         $content_labels = BWB_Products::get_bin_contents();
         $contents = array_map(
             function ( $k ) use ( $content_labels ) { return $content_labels[ $k ] ?? $k; },
             (array) ( $booking['bin_contents'] ?? [] )
         );
-        if ( ! empty( $booking['bin_contents_other'] ) ) {
-            $contents[] = $booking['bin_contents_other'];
-        }
+        if ( ! empty( $booking['bin_contents_other'] ) ) $contents[] = $booking['bin_contents_other'];
         $rows['Bin Contents'] = ! empty( $contents ) ? implode( ', ', $contents ) : 'Not specified';
 
-        /* 8. Additional Notes */
         if ( ! empty( $booking['additional_note'] ) ) {
             $rows['Additional Notes'] = $booking['additional_note'];
         }
@@ -468,26 +488,19 @@ class BWB_WooCommerce {
         return $rows;
     }
 
-    /**
-     * Build a label => value array for the full pricing breakdown.
-     * Shows each charge as a separate line item, then a grand total.
-     */
     private static function build_pricing_rows( array $booking ) {
         $bins      = BWB_Products::get_bins();
         $bin       = $bins[ $booking['bin_id'] ?? '' ] ?? null;
         $durations = BWB_Products::get_durations();
-
         if ( ! $bin ) return [];
 
-        $rows      = [];
-        $running   = 0.0;
+        $rows    = [];
+        $running = 0.0;
 
-        /* 1. Base bin price */
         $base = floatval( $bin['price'] );
         $rows[ $bin['name'] . ' (base price)' ] = '$' . number_format( $base, 2 );
         $running += $base;
 
-        /* 2. Rental duration surcharge */
         if ( ! empty( $booking['duration'] ) && $booking['duration'] !== 'flat' ) {
             $dur = $durations[ $booking['duration'] ] ?? null;
             if ( $dur ) {
@@ -500,7 +513,6 @@ class BWB_WooCommerce {
             }
         }
 
-        /* 3. Delivery zone fee */
         $zone_fee = floatval( $booking['zone_fee'] ?? 0 );
         $zone     = $booking['delivery_zone'] ?? '';
         if ( $zone_fee > 0 ) {
@@ -510,10 +522,8 @@ class BWB_WooCommerce {
             $rows[ 'Delivery Zone — ' . ( $zone ?: 'Standard' ) ] = 'Included';
         }
 
-        /* 4. Grand total */
-        $stored_total = floatval( $booking['total_price'] ?? 0 );
-        // Prefer the stored total (source of truth), fall back to the recalculated running total
-        $grand_total  = $stored_total > 0 ? $stored_total : $running;
+        $stored_total       = floatval( $booking['total_price'] ?? 0 );
+        $grand_total        = $stored_total > 0 ? $stored_total : $running;
         $rows['Order Total'] = '$' . number_format( $grand_total, 2 );
 
         return $rows;

@@ -1,8 +1,8 @@
-<?php 
+<?php
 /**
  * Plugin Name: Yellow Bins Digitize
  * Description: Multi-step bin rental booking form that feeds into WooCommerce checkout.
- * Version: 1.0.0
+ * Version: 1.1.0
  * Author: Ateeb Azhar Digitize Media
  * Text Domain: binwise-booking
  * Requires Plugins: woocommerce
@@ -12,7 +12,19 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 
 define( 'BWB_PATH',    plugin_dir_path( __FILE__ ) );
 define( 'BWB_URL',     plugin_dir_url( __FILE__ ) );
-define( 'BWB_VERSION', '1.0.0' );
+define( 'BWB_VERSION', '1.1.0' );
+
+// ── Debug logging helper ──────────────────────────────────────────────────────
+if ( ! function_exists( 'bwb_log' ) ) {
+    function bwb_log( $message, $data = null ) {
+        if ( ! defined( 'WP_DEBUG' ) || ! WP_DEBUG ) return;
+        $entry = '[BWB ' . current_time( 'Y-m-d H:i:s' ) . '] ' . $message;
+        if ( $data !== null ) {
+            $entry .= ' | ' . ( is_string( $data ) ? $data : wp_json_encode( $data ) );
+        }
+        error_log( $entry );
+    }
+}
 
 require_once BWB_PATH . 'includes/class-bwb-install.php';
 require_once BWB_PATH . 'includes/class-bwb-products.php';
@@ -30,7 +42,7 @@ add_action( 'plugins_loaded', function () {
         });
         return;
     }
-    // Ensure DB table exists on every load (handles upgrades / missed activations)
+
     BWB_Install::ensure_table();
     BWB_Install::maybe_create_booking_product();
 
